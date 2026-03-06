@@ -397,65 +397,57 @@ export default function Page() {
   }
 
   async function startRender() {
-    if (!baseUrl) {
-      setStatus({ status: "error", error: "baseUrl not ready. Refresh once." });
+  if (!baseUrl) {
+    setStatus({ status: "error", error: "baseUrl not ready. Refresh once." });
+    return;
+  }
+
+  setStatus({ status: "rendering" });
+
+  const finalPayload =
+    mode === "text" && storyboard
+      ? {
+          ...payload,
+          slogan: storyboard.script.cta || payload.slogan,
+          text: storyboard.script.body.join(" "),
+          storyboard: storyboard.scenes.map((s) => ({
+            type: "value",
+            bullets: [s.on_screen_text || s.title],
+            seconds: s.duration_sec,
+            prompt: s.prompt,
+            title: s.title,
+          })),
+        }
+      : payload;
+
+  try {
+    const res = await fetch("/api/render", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(finalPayload),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      setStatus({
+        status: "error",
+        error: data?.error ?? "Render failed",
+      });
       return;
     }
 
-    setStatus({ status: "rendering" });
-
-    const finalPayload =
-      mode === "text" && storyboard
-        ? {
-            ...payload,
-            slogan: storyboard.script.cta || payload.slogan,
-            text: storyboard.script.body.join(" "),
-            storyboard: storyboard.scenes.map((s) => ({
-              type: "value",
-              bullets: [s.on_screen_text || s.title],
-              seconds: s.duration_sec,
-              prompt: s.prompt,
-              title: s.title,
-            })),
-          }
-        : payload;
-
-    try {
-      const res = await fetch("/api/render", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(finalPayload),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setStatus({
-          status: "error",
-          error: data?.error ?? "Render failed",
-        });
-        return;
-      }
-
-      if (!data?.url) {
-        setStatus({
-          status: "error",
-          error: "Render completed but no URL was returned",
-        });
-        return;
-      }
-
-      setStatus({
-        status: "done",
-        url: data.url,
-      });
-    } catch (err: any) {
-      setStatus({
-        status: "error",
-        error: err?.message ?? "Render failed",
-      });
-    }
+    setStatus({
+      status: "done",
+      url: data.url,
+    });
+  } catch (err: any) {
+    setStatus({
+      status: "error",
+      error: err?.message ?? "Render failed",
+    });
   }
+}
 
   const canRender =
     durationSec >= 10 &&

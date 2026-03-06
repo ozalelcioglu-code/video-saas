@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import path from "path";
-import fs from "fs/promises";
-import { randomUUID } from "crypto";
-
-import { buildStoryboard } from "@/lib/storyboard";
+import {
+  addBundleToSandbox,
+  createSandbox,
+  renderMediaOnVercel,
+  uploadToVercelBlob,
+} from "@remotion/vercel";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,76 +21,46 @@ function pickCompositionId(ratio: Ratio) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-
     const ratio: Ratio = (body?.ratio ?? "square") as Ratio;
     const compositionId = pickCompositionId(ratio);
 
-    const outDir = path.join(process.cwd(), "public", "renders");
-    await fs.mkdir(outDir, { recursive: true });
+    const bundleDir = path.resolve(process.cwd(), "public", "remotion-bundle");
 
-    const storyboard = body?.storyboard ?? buildStoryboard(body);
+    const sandbox = await createSandbox();
 
-    const inputProps = {
-      ...body,
-      storyboard,
-    };
+    try {
+      await addBundleToSandbox({
+        sandbox,
+        bundleDir,
+      });
 
-    const entryPoint = path.resolve(process.cwd(), "remotion", "entry.ts");
+      const { sandboxFilePath } = await renderMediaOnVercel({
+        sandbox,
+        compositionId,
+        inputProps: body,
+        codec: "h264",
+        outputFile: "/tmp/video.mp4",
+      });
 
-    // Dinamik import: build aşamasında webpack kavgasını azaltır
-    const bundler = await import("@remotion/bundler");
-    const renderer = await import("@remotion/renderer");
-    const remotionVercel = await import("@remotion/vercel");
+      const { url } = await uploadToVercelBlob({
+        sandbox,
+        sandboxFilePath,
+        contentType: "video/mp4",
+        blobToken: process.env.BLOB_READ_WRITE_TOKEN!,
+        access: "public",
+        blobPath: `renders/${Date.now()}.mp4`,
+      });
 
-    // Not:
-    // Eğer createSandbox / renderMediaOnVercel tipleri editörde kırmızı görünürse,
-    // paket sürüm uyumsuzluğu vardır. Ama bu dosya mantıksal olarak doğru akıştır.
-    const serveUrl = await bundler.bundle({
-      entryPoint,
-    });
-
-    const compositions = await renderer.getCompositions(serveUrl, {
-      inputProps,
-    });
-
-    const comp = compositions.find((c) => c.id === compositionId);
-
-    if (!comp) {
-      const available = compositions.map((c) => c.id).join(", ");
-      throw new Error(
-        `Composition '${compositionId}' bulunamadı. Mevcut compositionlar: ${available}`
+      return NextResponse.json(
+        {
+          status: "done",
+          url,
+        },
+        { status: 200 }
       );
+    } finally {
+      await sandbox.stop();
     }
-
-    const fileName = `${randomUUID()}.mp4`;
-
-    const sandbox = await remotionVercel.createSandbox();
-
-    const result = await remotionVercel.renderMediaOnVercel({
-      serveUrl,
-      composition: comp,
-      codec: "h264",
-      inputProps,
-      sandbox,
-      fileName,
-    } as any);
-
-    const url =
-      (result as any)?.url ??
-      (result as any)?.publicUrl ??
-      (result as any)?.outputUrl;
-
-    if (!url) {
-      throw new Error("Render tamamlandı ama video URL dönmedi");
-    }
-
-    return NextResponse.json(
-      {
-        status: "done",
-        url,
-      },
-      { status: 200 }
-    );
   } catch (err: any) {
     return NextResponse.json(
       {

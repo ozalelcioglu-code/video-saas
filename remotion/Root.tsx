@@ -13,33 +13,33 @@ export const RemotionRoot: React.FC = () => {
       {
         type: "intro",
         text: "Create stunning social media videos with AI",
-        seconds: 6,
+        seconds: 6
       },
       {
         type: "value",
         bullets: [
           "AI Storyboard Generation",
           "Cinematic Social Videos",
-          "Fast & Scalable Content Creation",
+          "Fast & Scalable Content Creation"
         ],
-        seconds: 8,
+        seconds: 8
       },
       {
         type: "cta",
         brand: "Duble-S Technology",
         slogan: "Turn Ideas into Viral Videos",
-        seconds: 10,
-      },
+        seconds: 10
+      }
     ],
     assets: {
       logoUrl: "",
-      images: [],
-    },
+      images: []
+    }
   };
 
   return (
     <>
-      < Composition
+      <Composition
         id="AdSquare"
         component={AdTemplate as any}
         durationInFrames={24 * 30}
@@ -48,8 +48,7 @@ export const RemotionRoot: React.FC = () => {
         height={1080}
         defaultProps={defaultProps as any}
       />
-
-      < Composition
+      <Composition
         id="AdVertical"
         component={AdTemplate as any}
         durationInFrames={24 * 30}
@@ -58,8 +57,7 @@ export const RemotionRoot: React.FC = () => {
         height={1920}
         defaultProps={defaultProps as any}
       />
-
-      < Composition
+      <Composition
         id="AdHorizontal"
         component={AdTemplate as any}
         durationInFrames={24 * 30}
