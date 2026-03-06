@@ -7,6 +7,7 @@ import { createJob, setJob } from "@/lib/jobs";
 import { buildStoryboard } from "@/lib/storyboard";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 type Ratio = "square" | "vertical" | "horizontal";
 

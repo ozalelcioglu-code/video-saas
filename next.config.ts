@@ -1,14 +1,16 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: [
-    "@remotion/bundler",
-    "@remotion/renderer",
-    "remotion",
-  ],
-  outputFileTracingIncludes: {
-    "/api/render": ["./remotion/**/*"],
+  experimental: {
+    serverComponentsExternalPackages: [
+      "@remotion/bundler",
+      "@remotion/renderer",
+      "remotion"
+    ]
   },
+  outputFileTracingIncludes: {
+    "/api/render": ["./remotion/**/*"]
+  }
 };
 
 export default nextConfig;
