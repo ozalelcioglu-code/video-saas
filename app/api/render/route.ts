@@ -29,20 +29,25 @@ export async function POST(req: Request) {
     const jobId = randomUUID();
     createJob(jobId);
 
-    // Hemen queued dön
-    setJob(jobId, { status: "queued", progress: 0, createdAt: Date.now() });
+    setJob(jobId, {
+      status: "queued",
+      progress: 0,
+      createdAt: Date.now(),
+    });
 
-    // Render async devam etsin
     void (async () => {
       let cleanup: null | (() => Promise<void> | void) = null;
 
       try {
-        setJob(jobId, { status: "bundling", progress: 1, createdAt: Date.now() });
+        setJob(jobId, {
+          status: "bundling",
+          progress: 1,
+          createdAt: Date.now(),
+        });
 
         const outDir = path.join(process.cwd(), "public", "renders");
         await fs.mkdir(outDir, { recursive: true });
 
-        // storyboard (client'tan gelmezse üret)
         const storyboard = body?.storyboard ?? buildStoryboard(body);
 
         const inputProps = {
@@ -50,12 +55,11 @@ export async function POST(req: Request) {
           storyboard,
         };
 
-        const entryPoint = path.join(process.cwd(), "remotion", "entry.ts");
+        // Production için güvenli entry:
+        const entryPoint = path.resolve(process.cwd(), "remotion", "entry.ts");
 
-        // bundle -> { serveUrl, cleanup } döner (remotion sürümüne göre string de dönebilir)
         const bundled = await bundle({
           entryPoint,
-          // webpackOverride istersen burada eklenir
         });
 
         let serveUrl: string | undefined;
@@ -63,23 +67,30 @@ export async function POST(req: Request) {
         if (typeof bundled === "string") {
           serveUrl = bundled;
         } else {
-          // remotion/bundler yeni sürümler
-          serveUrl = (bundled as any).serveUrl || (bundled as any).url;
+          serveUrl = (bundled as any).serveUrl ?? (bundled as any).url;
           cleanup = (bundled as any).cleanup ?? null;
         }
 
-        if (!serveUrl) throw new Error("serveUrl is undefined (bundle sonucu bozuk)");
+        if (!serveUrl) {
+          throw new Error("Remotion bundle failed: serveUrl is undefined");
+        }
 
-        setJob(jobId, { status: "rendering", progress: 5, createdAt: Date.now() });
+        setJob(jobId, {
+          status: "rendering",
+          progress: 5,
+          createdAt: Date.now(),
+        });
 
-        // compositions listesi al ve doğru ID var mı kontrol et
-        const comps = await getCompositions(serveUrl, { inputProps });
+        const comps = await getCompositions(serveUrl, {
+          inputProps,
+        });
+
         const comp = comps.find((c) => c.id === compositionId);
 
         if (!comp) {
           const available = comps.map((c) => c.id).join(", ");
           throw new Error(
-            `Composition '${compositionId}' bulunamadı. Mevcut: ${available}`
+            `Composition '${compositionId}' bulunamadı. Mevcut compositionlar: ${available}`
           );
         }
 
@@ -118,17 +129,28 @@ export async function POST(req: Request) {
         });
       } finally {
         try {
-          if (cleanup) await cleanup();
+          if (cleanup) {
+            await cleanup();
+          }
         } catch {
-          // ignore
+          // ignore cleanup error
         }
       }
     })();
 
-    return NextResponse.json({ status: "ok", jobId }, { status: 200 });
+    return NextResponse.json(
+      {
+        status: "ok",
+        jobId,
+      },
+      { status: 200 }
+    );
   } catch (err: any) {
     return NextResponse.json(
-      { status: "error", error: err?.message ?? "Bad request" },
+      {
+        status: "error",
+        error: err?.message ?? "Bad request",
+      },
       { status: 400 }
     );
   }
