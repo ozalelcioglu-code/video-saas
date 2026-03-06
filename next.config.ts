@@ -5,12 +5,10 @@ const nextConfig: NextConfig = {
     serverComponentsExternalPackages: [
       "@remotion/bundler",
       "@remotion/renderer",
-      "remotion"
-    ]
+      "@remotion/vercel",
+      "remotion",
+    ],
   },
-  outputFileTracingIncludes: {
-    "/api/render": ["./remotion/**/*"]
-  }
 };
 
 export default nextConfig;

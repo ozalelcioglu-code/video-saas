@@ -1,16 +1,15 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 type Ratio = "square" | "vertical" | "horizontal";
 type Mode = "images" | "text" | "product";
 
 type RenderStatus =
   | { status: "idle" }
-  | { status: "queued"; jobId: string }
-  | { status: "rendering"; jobId: string; progress: number }
-  | { status: "done"; jobId: string; url: string }
-  | { status: "error"; jobId: string; error: string };
+  | { status: "rendering" }
+  | { status: "done"; url: string }
+  | { status: "error"; error: string };
 
 type StoryboardScene = {
   title: string;
@@ -46,8 +45,8 @@ const RATIO_LABEL: Record<Ratio, string> = {
   horizontal: "Horizontal (16:9)",
 };
 
-function clamp(n: number, a: number, b: number) {
-  return Math.max(a, Math.min(b, n));
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
 }
 
 export default function Page() {
@@ -58,6 +57,7 @@ export default function Page() {
   const [text, setText] = useState(
     "We build modern websites and custom software. Fast, secure, scalable."
   );
+
   const [durationSec, setDurationSec] = useState(24);
   const [ratio, setRatio] = useState<Ratio>("square");
 
@@ -81,32 +81,30 @@ export default function Page() {
 
   const [baseUrl, setBaseUrl] = useState("");
   const [status, setStatus] = useState<RenderStatus>({ status: "idle" });
-  const pollTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     setBaseUrl(window.location.origin);
-    return () => {
-      if (pollTimerRef.current) window.clearInterval(pollTimerRef.current);
-    };
   }, []);
 
   const computed = useMemo(() => {
     if (mode === "text") {
       const derivedBrand = brand || "Your Brand";
       const derivedSlogan =
-        storyboard?.script?.cta || slogan || "Modern websites • Custom software • Fast delivery";
+        storyboard?.script?.cta ||
+        slogan ||
+        "Modern websites • Custom software • Fast delivery";
 
       const derivedText =
         storyboard?.script?.body?.length
           ? storyboard.script.body.join(" ")
           : prompt.trim().length > 0
-          ? [
-              "High-converting websites and custom software.",
-              "Clean UI, fast performance, secure delivery.",
-              "From idea to launch—quick, reliable, scalable.",
-              "Book a free consultation today.",
-            ].join(" ")
-          : text;
+            ? [
+                "High-converting websites and custom software.",
+                "Clean UI, fast performance, secure delivery.",
+                "From idea to launch—quick, reliable, scalable.",
+                "Book a free consultation today.",
+              ].join(" ")
+            : text;
 
       return {
         brand: derivedBrand,
@@ -155,31 +153,58 @@ export default function Page() {
       ratio,
       assets: { logoUrl, images: imageUrls },
     }),
-    [baseUrl, computed.brand, computed.slogan, computed.text, durationSec, ratio, logoUrl, imageUrls]
+    [
+      baseUrl,
+      computed.brand,
+      computed.slogan,
+      computed.text,
+      durationSec,
+      ratio,
+      logoUrl,
+      imageUrls,
+    ]
   );
 
   async function uploadFiles(files: FileList) {
     const form = new FormData();
     Array.from(files).forEach((f) => form.append("files", f));
 
-    const res = await fetch("/api/upload", { method: "POST", body: form });
+    const res = await fetch("/api/upload", {
+      method: "POST",
+      body: form,
+    });
+
     const data = await res.json();
-    if (!res.ok) throw new Error(data?.error ?? "Upload failed");
+
+    if (!res.ok) {
+      throw new Error(data?.error ?? "Upload failed");
+    }
+
     return data.urls as string[];
   }
 
   async function onPickLogo(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-    const urls = await uploadFiles(files);
-    setLogoUrl(urls[0] ?? null);
+    try {
+      const files = e.target.files;
+      if (!files || files.length === 0) return;
+
+      const urls = await uploadFiles(files);
+      setLogoUrl(urls[0] ?? null);
+    } catch (err: any) {
+      setStatus({ status: "error", error: err?.message ?? "Logo upload failed" });
+    }
   }
 
   async function onPickImages(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-    const urls = await uploadFiles(files);
-    setImageUrls((prev) => [...prev, ...urls].slice(0, 6));
+    try {
+      const files = e.target.files;
+      if (!files || files.length === 0) return;
+
+      const urls = await uploadFiles(files);
+      setImageUrls((prev) => [...prev, ...urls].slice(0, 6));
+    } catch (err: any) {
+      setStatus({ status: "error", error: err?.message ?? "Image upload failed" });
+    }
   }
 
   async function generateStoryboard() {
@@ -288,6 +313,7 @@ export default function Page() {
     setStoryboard((prev) => {
       if (!prev) return prev;
       if (prev.script.body.length <= 1) return prev;
+
       return {
         ...prev,
         script: {
@@ -305,6 +331,7 @@ export default function Page() {
   ) {
     setStoryboard((prev) => {
       if (!prev) return prev;
+
       const scenes = [...prev.scenes];
       const scene = { ...scenes[index] };
 
@@ -360,15 +387,7 @@ export default function Page() {
     });
   }
 
-  function clearPolling() {
-    if (pollTimerRef.current) {
-      window.clearInterval(pollTimerRef.current);
-      pollTimerRef.current = null;
-    }
-  }
-
   function resetAll() {
-    clearPolling();
     setStatus({ status: "idle" });
     setLogoUrl(null);
     setImageUrls([]);
@@ -379,12 +398,11 @@ export default function Page() {
 
   async function startRender() {
     if (!baseUrl) {
-      setStatus({ status: "error", jobId: "", error: "baseUrl not ready. Refresh once." });
+      setStatus({ status: "error", error: "baseUrl not ready. Refresh once." });
       return;
     }
 
-    clearPolling();
-    setStatus({ status: "idle" });
+    setStatus({ status: "rendering" });
 
     const finalPayload =
       mode === "text" && storyboard
@@ -402,65 +420,47 @@ export default function Page() {
           }
         : payload;
 
-    const res = await fetch("/api/render", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(finalPayload),
-    });
+    try {
+      const res = await fetch("/api/render", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(finalPayload),
+      });
 
-    const data = await res.json();
+      const data = await res.json();
 
-    if (!res.ok) {
-      setStatus({ status: "error", jobId: "", error: data?.error ?? "Render failed" });
-      return;
-    }
-
-    const jobId = data.jobId as string;
-    if (!jobId) {
-      setStatus({ status: "error", jobId: "", error: "Render API did not return jobId" });
-      return;
-    }
-
-    setStatus({ status: "queued", jobId });
-
-    pollTimerRef.current = window.setInterval(async () => {
-      try {
-        const sres = await fetch(`/api/status?jobId=${encodeURIComponent(jobId)}`);
-        const sdata = await sres.json();
-
-        if (!sres.ok) {
-          setStatus({ status: "error", jobId, error: sdata?.error ?? "Status failed" });
-          clearPolling();
-          return;
-        }
-
-        if (sdata.status === "rendering") {
-          const p = typeof sdata.progress === "number" ? sdata.progress : 0;
-          setStatus({ status: "rendering", jobId, progress: clamp(p, 0, 100) });
-        } else if (sdata.status === "done") {
-          setStatus({ status: "done", jobId, url: sdata.url });
-          clearPolling();
-        } else if (sdata.status === "error") {
-          setStatus({ status: "error", jobId, error: sdata.error ?? "Unknown error" });
-          clearPolling();
-        } else if (sdata.status === "queued" || sdata.status === "bundling") {
-          setStatus({
-            status: "rendering",
-            jobId,
-            progress: typeof sdata.progress === "number" ? sdata.progress : 1,
-          });
-        }
-      } catch (err: any) {
-        setStatus({ status: "error", jobId, error: err?.message ?? "Status polling failed" });
-        clearPolling();
+      if (!res.ok) {
+        setStatus({
+          status: "error",
+          error: data?.error ?? "Render failed",
+        });
+        return;
       }
-    }, 800);
+
+      if (!data?.url) {
+        setStatus({
+          status: "error",
+          error: "Render completed but no URL was returned",
+        });
+        return;
+      }
+
+      setStatus({
+        status: "done",
+        url: data.url,
+      });
+    } catch (err: any) {
+      setStatus({
+        status: "error",
+        error: err?.message ?? "Render failed",
+      });
+    }
   }
 
   const canRender =
-    (mode === "images" ? imageUrls.length > 0 || !!logoUrl : true) &&
     durationSec >= 10 &&
-    durationSec <= 60;
+    durationSec <= 60 &&
+    (mode === "images" ? imageUrls.length > 0 || !!logoUrl : true);
 
   const styles = {
     page: {
@@ -468,7 +468,8 @@ export default function Page() {
       background:
         "radial-gradient(1200px 600px at 20% 0%, rgba(99,102,241,0.25), transparent 60%), radial-gradient(900px 500px at 90% 10%, rgba(56,189,248,0.20), transparent 55%), linear-gradient(180deg, #050814, #060a18 60%, #070b1b)",
       color: "#eaf0ff",
-      fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial",
+      fontFamily:
+        "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial",
     } as React.CSSProperties,
     wrap: {
       maxWidth: 1280,
@@ -706,8 +707,8 @@ export default function Page() {
     } as React.CSSProperties,
   };
 
-  const renderPct =
-    status.status === "rendering" ? clamp(status.progress, 0, 100) : status.status === "done" ? 100 : 0;
+  const progressPercent =
+    status.status === "rendering" ? 55 : status.status === "done" ? 100 : 0;
 
   return (
     <div style={styles.page}>
@@ -770,7 +771,11 @@ export default function Page() {
                       <div style={styles.thumbGrid}>
                         {imageUrls.slice(0, 3).map((u) => (
                           <div key={u} style={styles.thumb}>
-                            <img src={u} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                            <img
+                              src={u}
+                              alt=""
+                              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                            />
                           </div>
                         ))}
                       </div>
@@ -782,7 +787,11 @@ export default function Page() {
                       <div style={styles.label}>Logo preview</div>
                       <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                         <div style={{ ...styles.thumb, width: 92, height: 92, aspectRatio: "auto" }}>
-                          <img src={logoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                          <img
+                            src={logoUrl}
+                            alt=""
+                            style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                          />
                         </div>
                         <div style={styles.small}>{logoUrl}</div>
                       </div>
@@ -882,7 +891,15 @@ export default function Page() {
 
                       {storyboard.scenes.map((scene, index) => (
                         <div key={index} style={{ ...styles.storyboardCard, marginTop: 10 }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              gap: 10,
+                              marginBottom: 10,
+                            }}
+                          >
                             <div style={{ fontWeight: 900 }}>Scene {index + 1}</div>
                             <button style={styles.dangerBtn} onClick={() => removeStoryboardScene(index)}>
                               Remove scene
@@ -893,7 +910,9 @@ export default function Page() {
                             <div style={styles.label}>Scene Title</div>
                             <input
                               value={scene.title}
-                              onChange={(e) => updateStoryboardScene(index, "title", e.target.value)}
+                              onChange={(e) =>
+                                updateStoryboardScene(index, "title", e.target.value)
+                              }
                               style={styles.input}
                             />
                           </div>
@@ -903,7 +922,9 @@ export default function Page() {
                               <div style={styles.label}>On-screen text</div>
                               <input
                                 value={scene.on_screen_text}
-                                onChange={(e) => updateStoryboardScene(index, "on_screen_text", e.target.value)}
+                                onChange={(e) =>
+                                  updateStoryboardScene(index, "on_screen_text", e.target.value)
+                                }
                                 style={styles.input}
                               />
                             </div>
@@ -915,7 +936,9 @@ export default function Page() {
                                 min={2}
                                 max={10}
                                 value={scene.duration_sec}
-                                onChange={(e) => updateStoryboardScene(index, "duration_sec", Number(e.target.value))}
+                                onChange={(e) =>
+                                  updateStoryboardScene(index, "duration_sec", Number(e.target.value))
+                                }
                                 style={styles.input}
                               />
                             </div>
@@ -925,7 +948,9 @@ export default function Page() {
                             <div style={styles.label}>Scene Prompt</div>
                             <textarea
                               value={scene.prompt}
-                              onChange={(e) => updateStoryboardScene(index, "prompt", e.target.value)}
+                              onChange={(e) =>
+                                updateStoryboardScene(index, "prompt", e.target.value)
+                              }
                               style={{ ...styles.textarea, minHeight: 120 }}
                             />
                           </div>
@@ -1000,14 +1025,22 @@ export default function Page() {
                     <div style={styles.hint}>
                       You can still upload a logo + images for a better product ad.
                     </div>
+
                     <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 8 }}>
                       <label style={{ display: "grid", gap: 6, flex: "1 1 220px" }}>
                         <span style={styles.label}>Logo</span>
                         <input type="file" accept="image/*" onChange={onPickLogo} style={styles.input} />
                       </label>
+
                       <label style={{ display: "grid", gap: 6, flex: "1 1 220px" }}>
                         <span style={styles.label}>Images</span>
-                        <input type="file" accept="image/*" multiple onChange={onPickImages} style={styles.input} />
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          onChange={onPickImages}
+                          style={styles.input}
+                        />
                       </label>
                     </div>
                   </div>
@@ -1019,11 +1052,20 @@ export default function Page() {
               <div style={styles.row}>
                 <div style={styles.field}>
                   <div style={styles.label}>Brand</div>
-                  <input value={brand} onChange={(e) => setBrand(e.target.value)} style={styles.input} />
+                  <input
+                    value={brand}
+                    onChange={(e) => setBrand(e.target.value)}
+                    style={styles.input}
+                  />
                 </div>
+
                 <div style={styles.field}>
                   <div style={styles.label}>Slogan</div>
-                  <input value={slogan} onChange={(e) => setSlogan(e.target.value)} style={styles.input} />
+                  <input
+                    value={slogan}
+                    onChange={(e) => setSlogan(e.target.value)}
+                    style={styles.input}
+                  />
                 </div>
               </div>
 
@@ -1042,12 +1084,17 @@ export default function Page() {
               <div style={styles.row}>
                 <div style={styles.field}>
                   <div style={styles.label}>Format</div>
-                  <select value={ratio} onChange={(e) => setRatio(e.target.value as Ratio)} style={styles.input}>
+                  <select
+                    value={ratio}
+                    onChange={(e) => setRatio(e.target.value as Ratio)}
+                    style={styles.input}
+                  >
                     <option value="square">{RATIO_LABEL.square}</option>
                     <option value="vertical">{RATIO_LABEL.vertical}</option>
                     <option value="horizontal">{RATIO_LABEL.horizontal}</option>
                   </select>
                 </div>
+
                 <div style={styles.field}>
                   <div style={styles.label}>Duration (sec)</div>
                   <input
@@ -1064,10 +1111,10 @@ export default function Page() {
               <div style={styles.actions}>
                 <button
                   onClick={startRender}
-                  disabled={!canRender || status.status === "queued" || status.status === "rendering"}
-                  style={styles.primaryBtn(!canRender || status.status === "queued" || status.status === "rendering")}
+                  disabled={!canRender || status.status === "rendering"}
+                  style={styles.primaryBtn(!canRender || status.status === "rendering")}
                 >
-                  {status.status === "queued" || status.status === "rendering" ? "Rendering…" : "Generate Video"}
+                  {status.status === "rendering" ? "Rendering…" : "Generate Video"}
                 </button>
 
                 <button onClick={resetAll} style={styles.ghostBtn}>
@@ -1083,14 +1130,14 @@ export default function Page() {
                   <div style={{ fontWeight: 900 }}>Progress</div>
                   <div style={styles.small}>
                     {status.status === "idle" && "Ready"}
-                    {status.status === "queued" && `Queued (${status.jobId.slice(0, 8)}…)`}
-                    {status.status === "rendering" && `${Math.round(renderPct)}%`}
+                    {status.status === "rendering" && "Rendering..."}
                     {status.status === "done" && "Done"}
                     {status.status === "error" && "Error"}
                   </div>
                 </div>
+
                 <div style={styles.progressWrap}>
-                  <div style={styles.progressBar(renderPct)} />
+                  <div style={styles.progressBar(progressPercent)} />
                 </div>
 
                 {status.status === "error" && (
@@ -1106,10 +1153,18 @@ export default function Page() {
 
           <div style={styles.card}>
             <div style={{ ...styles.cardHeader, paddingBottom: 10 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "baseline",
+                  gap: 10,
+                }}
+              >
                 <div style={{ fontSize: 18, fontWeight: 950 }}>Preview</div>
                 <div style={styles.badge}>{RATIO_LABEL[ratio]}</div>
               </div>
+
               <div style={{ ...styles.hint, marginTop: 8 }}>
                 When rendering finishes, your video appears here with a download button.
               </div>
@@ -1126,15 +1181,14 @@ export default function Page() {
                   }}
                 >
                   <div style={{ fontWeight: 950, fontSize: 16, marginBottom: 6 }}>
-                    {status.status === "rendering" || status.status === "queued"
-                      ? "Rendering your video…"
-                      : "No preview yet"}
+                    {status.status === "rendering" ? "Rendering your video…" : "No preview yet"}
                   </div>
+
                   <div style={styles.small}>
                     {status.status === "idle" &&
                       "Upload assets or generate storyboard, then click Generate Video."}
-                    {(status.status === "queued" || status.status === "rendering") &&
-                      "Keep this tab open. Rendering happens on the server."}
+                    {status.status === "rendering" &&
+                      "Please wait while the video is being rendered on the server."}
                     {status.status === "error" && "Fix the error, then try again."}
                   </div>
 
@@ -1142,16 +1196,25 @@ export default function Page() {
                     <>
                       <div style={styles.divider} />
                       <div style={{ fontWeight: 900, marginBottom: 8 }}>Assets used</div>
+
                       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                         {logoUrl && (
                           <div style={{ ...styles.thumb, width: 90, height: 90, aspectRatio: "auto" }}>
-                            <img src={logoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                            <img
+                              src={logoUrl}
+                              alt=""
+                              style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                            />
                           </div>
                         )}
 
                         {imageUrls.slice(0, 5).map((u) => (
                           <div key={u} style={{ ...styles.thumb, width: 90, height: 90, aspectRatio: "auto" }}>
-                            <img src={u} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                            <img
+                              src={u}
+                              alt=""
+                              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                            />
                           </div>
                         ))}
                       </div>
@@ -1162,9 +1225,15 @@ export default function Page() {
                     <>
                       <div style={styles.divider} />
                       <div style={{ fontWeight: 900, marginBottom: 8 }}>Storyboard Summary</div>
-                      <div style={styles.small}><b>Title:</b> {storyboard.title}</div>
-                      <div style={styles.small}><b>Scenes:</b> {storyboard.scenes.length}</div>
-                      <div style={styles.small}><b>CTA:</b> {storyboard.script.cta}</div>
+                      <div style={styles.small}>
+                        <b>Title:</b> {storyboard.title}
+                      </div>
+                      <div style={styles.small}>
+                        <b>Scenes:</b> {storyboard.scenes.length}
+                      </div>
+                      <div style={styles.small}>
+                        <b>CTA:</b> {storyboard.script.cta}
+                      </div>
                     </>
                   )}
                 </div>
@@ -1173,10 +1242,12 @@ export default function Page() {
               {status.status === "done" && (
                 <>
                   <video style={styles.video} controls src={status.url} />
+
                   <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
                     <a style={styles.linkBtn} href={status.url} download>
                       Download MP4
                     </a>
+
                     <button style={styles.ghostBtn} onClick={() => setStatus({ status: "idle" })}>
                       Create another
                     </button>

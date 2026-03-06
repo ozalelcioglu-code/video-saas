@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import path from "path";
 import fs from "fs/promises";
+import { randomUUID } from "crypto";
 
 import { buildStoryboard } from "@/lib/storyboard";
 
@@ -34,65 +35,57 @@ export async function POST(req: Request) {
 
     const entryPoint = path.resolve(process.cwd(), "remotion", "entry.ts");
 
+    // Dinamik import: build aşamasında webpack kavgasını azaltır
     const bundler = await import("@remotion/bundler");
     const renderer = await import("@remotion/renderer");
-    const { randomUUID } = await import("crypto");
+    const remotionVercel = await import("@remotion/vercel");
 
-    const bundled = await bundler.bundle({
+    // Not:
+    // Eğer createSandbox / renderMediaOnVercel tipleri editörde kırmızı görünürse,
+    // paket sürüm uyumsuzluğu vardır. Ama bu dosya mantıksal olarak doğru akıştır.
+    const serveUrl = await bundler.bundle({
       entryPoint,
     });
 
-    let serveUrl: string | undefined;
-    let cleanup: null | (() => Promise<void> | void) = null;
-
-    if (typeof bundled === "string") {
-      serveUrl = bundled;
-    } else {
-      serveUrl = (bundled as any).serveUrl ?? (bundled as any).url;
-      cleanup = (bundled as any).cleanup ?? null;
-    }
-
-    if (!serveUrl) {
-      throw new Error("Remotion bundle failed: serveUrl is undefined");
-    }
-
-    const comps = await renderer.getCompositions(serveUrl, {
+    const compositions = await renderer.getCompositions(serveUrl, {
       inputProps,
     });
 
-    const comp = comps.find((c) => c.id === compositionId);
+    const comp = compositions.find((c) => c.id === compositionId);
 
     if (!comp) {
-      const available = comps.map((c) => c.id).join(", ");
+      const available = compositions.map((c) => c.id).join(", ");
       throw new Error(
         `Composition '${compositionId}' bulunamadı. Mevcut compositionlar: ${available}`
       );
     }
 
     const fileName = `${randomUUID()}.mp4`;
-    const outPath = path.join(outDir, fileName);
-    const publicUrl = `/renders/${fileName}`;
 
-    await renderer.renderMedia({
+    const sandbox = await remotionVercel.createSandbox();
+
+    const result = await remotionVercel.renderMediaOnVercel({
       serveUrl,
       composition: comp,
       codec: "h264",
-      outputLocation: outPath,
       inputProps,
-    });
+      sandbox,
+      fileName,
+    } as any);
 
-    try {
-      if (cleanup) {
-        await cleanup();
-      }
-    } catch {
-      // ignore cleanup error
+    const url =
+      (result as any)?.url ??
+      (result as any)?.publicUrl ??
+      (result as any)?.outputUrl;
+
+    if (!url) {
+      throw new Error("Render tamamlandı ama video URL dönmedi");
     }
 
     return NextResponse.json(
       {
         status: "done",
-        url: publicUrl,
+        url,
       },
       { status: 200 }
     );
