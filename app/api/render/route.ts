@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import path from "path";
 import {
   addBundleToSandbox,
   createSandbox,
@@ -24,7 +23,9 @@ export async function POST(req: Request) {
     const ratio: Ratio = (body?.ratio ?? "square") as Ratio;
     const compositionId = pickCompositionId(ratio);
 
-    const bundleDir = path.resolve(process.cwd(), "public", "remotion-bundle");
+    // ÖNEMLİ:
+    // Absolute path verme. Relative path kullan.
+    const bundleDir = "public/remotion-bundle";
 
     const sandbox = await createSandbox();
 
@@ -42,11 +43,16 @@ export async function POST(req: Request) {
         outputFile: "/tmp/video.mp4",
       });
 
+      const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
+      if (!blobToken) {
+        throw new Error("BLOB_READ_WRITE_TOKEN is missing");
+      }
+
       const { url } = await uploadToVercelBlob({
         sandbox,
         sandboxFilePath,
         contentType: "video/mp4",
-        blobToken: process.env.BLOB_READ_WRITE_TOKEN!,
+        blobToken,
         access: "public",
         blobPath: `renders/${Date.now()}.mp4`,
       });
