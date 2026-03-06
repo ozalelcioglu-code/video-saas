@@ -4,7 +4,6 @@ import { getJob } from "@/lib/jobs";
 export const runtime = "nodejs";
 
 export async function GET(req: Request) {
-
   const { searchParams } = new URL(req.url);
   const jobId = searchParams.get("jobId");
 
@@ -15,7 +14,7 @@ export async function GET(req: Request) {
     );
   }
 
-  const job = getJob(jobId);
+  const job = await getJob(jobId);
 
   if (!job) {
     return NextResponse.json(
@@ -24,5 +23,5 @@ export async function GET(req: Request) {
     );
   }
 
-  return NextResponse.json(job);
+  return NextResponse.json(job, { status: 200 });
 }

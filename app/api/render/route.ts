@@ -27,9 +27,9 @@ export async function POST(req: Request) {
     const compositionId = pickCompositionId(ratio);
 
     const jobId = randomUUID();
-    createJob(jobId);
+    await createJob(jobId);
 
-    setJob(jobId, {
+    await setJob(jobId, {
       status: "queued",
       progress: 0,
       createdAt: Date.now(),
@@ -39,7 +39,7 @@ export async function POST(req: Request) {
       let cleanup: null | (() => Promise<void> | void) = null;
 
       try {
-        setJob(jobId, {
+        await setJob(jobId, {
           status: "bundling",
           progress: 1,
           createdAt: Date.now(),
@@ -75,7 +75,7 @@ export async function POST(req: Request) {
           throw new Error("Remotion bundle failed: serveUrl is undefined");
         }
 
-        setJob(jobId, {
+        await setJob(jobId, {
           status: "rendering",
           progress: 5,
           createdAt: Date.now(),
@@ -106,7 +106,7 @@ export async function POST(req: Request) {
           inputProps,
           onProgress: ({ progress }) => {
             const pct = Math.max(1, Math.min(99, Math.round(progress * 100)));
-            setJob(jobId, {
+             setJob(jobId, {
               status: "rendering",
               progress: pct,
               createdAt: Date.now(),
@@ -114,14 +114,14 @@ export async function POST(req: Request) {
           },
         });
 
-        setJob(jobId, {
+        await setJob(jobId, {
           status: "done",
           progress: 100,
           url: publicUrl,
           createdAt: Date.now(),
         });
       } catch (err: any) {
-        setJob(jobId, {
+        await setJob(jobId, {
           status: "error",
           progress: 0,
           error: err?.message ?? "Render failed",
