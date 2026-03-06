@@ -55,7 +55,6 @@ export async function POST(req: Request) {
           storyboard,
         };
 
-        // Production için güvenli entry:
         const entryPoint = path.resolve(process.cwd(), "remotion", "entry.ts");
 
         const bundled = await bundle({
@@ -104,9 +103,9 @@ export async function POST(req: Request) {
           codec: "h264",
           outputLocation: outPath,
           inputProps,
-          onProgress: ({ progress }) => {
+          onProgress: async ({ progress }) => {
             const pct = Math.max(1, Math.min(99, Math.round(progress * 100)));
-             setJob(jobId, {
+            await setJob(jobId, {
               status: "rendering",
               progress: pct,
               createdAt: Date.now(),

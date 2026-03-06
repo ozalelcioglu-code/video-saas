@@ -1,3 +1,4 @@
+import os from "os";
 import path from "path";
 import fs from "fs/promises";
 
@@ -9,7 +10,7 @@ export type JobStatus = {
   error?: string;
 };
 
-const JOBS_DIR = path.join(process.cwd(), "tmp", "jobs");
+const JOBS_DIR = path.join(os.tmpdir(), "video-saas-jobs");
 
 async function ensureJobsDir() {
   await fs.mkdir(JOBS_DIR, { recursive: true });
