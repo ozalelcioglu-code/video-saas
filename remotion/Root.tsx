@@ -39,7 +39,7 @@ export const RemotionRoot: React.FC = () => {
 
   return (
     <>
-      <Composition
+      < Composition
         id="AdSquare"
         component={AdTemplate as any}
         durationInFrames={24 * 30}
@@ -49,7 +49,7 @@ export const RemotionRoot: React.FC = () => {
         defaultProps={defaultProps as any}
       />
 
-      <Composition
+      < Composition
         id="AdVertical"
         component={AdTemplate as any}
         durationInFrames={24 * 30}
@@ -59,7 +59,7 @@ export const RemotionRoot: React.FC = () => {
         defaultProps={defaultProps as any}
       />
 
-      <Composition
+      < Composition
         id="AdHorizontal"
         component={AdTemplate as any}
         durationInFrames={24 * 30}

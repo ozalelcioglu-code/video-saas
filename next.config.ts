@@ -9,6 +9,9 @@ const nextConfig: NextConfig = {
       "remotion",
     ],
   },
+  outputFileTracingIncludes: {
+    "/api/render": ["./remotion/**/*"],
+  },
 };
 
 export default nextConfig;
