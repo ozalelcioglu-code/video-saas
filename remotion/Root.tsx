@@ -1,23 +1,35 @@
+import React from "react";
 import { Composition } from "remotion";
 import { AdTemplate } from "./compositions/AdTemplate";
 
+type AdTemplateProps = React.ComponentProps<typeof AdTemplate>;
+
 export const RemotionRoot: React.FC = () => {
-  const defaultProps = {
+  const defaultProps: AdTemplateProps = {
     brand: "Duble-S Technology",
     slogan: "Digital Solutions for Modern Businesses",
-    baseUrl: "",
-    ratio: "square",
-    durationSec: 24,
     storyboard: [
-      { type: "text", text: "Welcome to Duble-S Technology", seconds: 3 },
-      { type: "text", text: "We build modern digital solutions", seconds: 3 },
-      { type: "text", text: "Web • AI • Software", seconds: 3 },
-      { type: "text", text: "Fast. Secure. Scalable.", seconds: 3 },
+      {
+        type: "intro",
+        text: "Create stunning social media videos with AI",
+        seconds: 6,
+      },
+      {
+        type: "value",
+        bullets: [
+          "AI Storyboard Generation",
+          "Cinematic Social Videos",
+          "Fast & Scalable Content Creation",
+        ],
+        seconds: 8,
+      },
+      {
+        type: "cta",
+        brand: "Duble-S Technology",
+        slogan: "Turn Ideas into Viral Videos",
+        seconds: 10,
+      },
     ],
-    assets: {
-      logoUrl: "",
-      images: [],
-    },
   };
 
   return (
