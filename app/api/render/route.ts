@@ -3,9 +3,6 @@ import path from "path";
 import fs from "fs/promises";
 import { randomUUID } from "crypto";
 
-import { bundle } from "@remotion/bundler";
-import { getCompositions, renderMedia } from "@remotion/renderer";
-
 import { createJob, setJob } from "@/lib/jobs";
 import { buildStoryboard } from "@/lib/storyboard";
 
@@ -57,7 +54,11 @@ export async function POST(req: Request) {
 
         const entryPoint = path.resolve(process.cwd(), "remotion", "entry.ts");
 
-        const bundled = await bundle({
+        // Remotion paketlerini burada dinamik import ediyoruz
+        const bundler = await import("@remotion/bundler");
+        const renderer = await import("@remotion/renderer");
+
+        const bundled = await bundler.bundle({
           entryPoint,
         });
 
@@ -80,7 +81,7 @@ export async function POST(req: Request) {
           createdAt: Date.now(),
         });
 
-        const comps = await getCompositions(serveUrl, {
+        const comps = await renderer.getCompositions(serveUrl, {
           inputProps,
         });
 
@@ -97,7 +98,7 @@ export async function POST(req: Request) {
         const outPath = path.join(outDir, fileName);
         const publicUrl = `/renders/${fileName}`;
 
-        await renderMedia({
+        await renderer.renderMedia({
           serveUrl,
           composition: comp,
           codec: "h264",
