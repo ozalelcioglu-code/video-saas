@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
-    "prebuild": "remotion bundle remotion/entry.ts public/remotion-bundle",
+    "prebuild": "npx remotion bundle remotion/entry.ts public/remotion-bundle",
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint ."
