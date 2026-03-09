@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { generateStoryboard } from "../../../../lib/ai/openai";
-
+import { generateStoryboard } from "./ai/openai";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
