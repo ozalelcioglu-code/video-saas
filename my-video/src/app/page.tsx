@@ -129,7 +129,7 @@ export default function Page() {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
 
-  const [prompt, setPrompt] = useState(
+  const [prompt] = useState(
     "Create a cinematic 20–30s marketing video for a web development & software company. Emphasize speed, quality, and trust."
   );
 
