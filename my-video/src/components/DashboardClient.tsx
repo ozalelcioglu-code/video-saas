@@ -1,6 +1,5 @@
 "use client";
 
-import React from "react";
 
 type RecentVideo = {
   id: string;

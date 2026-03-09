@@ -1,4 +1,3 @@
-import React from "react";
 
 const Tip: React.FC<{
   title: React.ReactNode;

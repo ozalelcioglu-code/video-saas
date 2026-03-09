@@ -1,4 +1,3 @@
-import React from "react";
 
 export const InputContainer: React.FC<{
   children: React.ReactNode;

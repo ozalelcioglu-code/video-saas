@@ -1,4 +1,3 @@
-import React from "react";
 import { Composition } from "remotion";
 import { Main } from "./MyComp/Main";
 import { NextLogo } from "./MyComp/NextLogo";

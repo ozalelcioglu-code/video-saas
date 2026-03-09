@@ -1,6 +1,5 @@
 "use client";
 
-import React from "react";
 import { authClient } from "../lib/auth-client";
 
 type Props = {

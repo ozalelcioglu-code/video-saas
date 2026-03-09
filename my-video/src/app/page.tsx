@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppSidebar } from "../components/AppSidebar";
 type Ratio = "square" | "vertical" | "horizontal";
 type Mode = "images" | "text" | "product";

@@ -1,4 +1,3 @@
-import React from "react";
 import { State } from "../helpers/use-rendering";
 import { Button } from "./Button";
 import { Spacing } from "./Spacing";

@@ -1,4 +1,3 @@
-import React from "react";
 
 export const ErrorComp: React.FC<{
   message: string;

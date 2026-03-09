@@ -1,4 +1,3 @@
-import React from "react";
 import { AbsoluteFill, interpolateColors, useVideoConfig } from "remotion";
 
 const RadialGradient: React.FC<{

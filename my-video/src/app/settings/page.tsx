@@ -1,4 +1,3 @@
-import React from "react";
 import { AppPageShell } from "../../components/AppPageShell";
 
 export default function SettingsPage() {
