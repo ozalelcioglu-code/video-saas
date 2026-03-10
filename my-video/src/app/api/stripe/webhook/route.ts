@@ -7,6 +7,8 @@ import {
   resetUserToFreePlan,
 } from "../../../../lib/user-profile-repository";
 
+export const runtime = "nodejs";
+
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -65,23 +67,18 @@ export async function POST(req: Request) {
 
   try {
     event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
-    console.log("WEBHOOK RAW OK");
-    console.log("WEBHOOK EVENT TYPE:", event.type);
+    console.log("WEBHOOK VERIFIED:", event.type, event.id);
   } catch (err: any) {
     console.error("STRIPE_WEBHOOK_SIGNATURE_ERROR:", err?.message || err);
     return new NextResponse(
       `Webhook Error: ${err?.message || "Invalid signature"}`,
-      {
-        status: 400,
-      }
+      { status: 400 }
     );
   }
 
   try {
     switch (event.type) {
       case "checkout.session.completed": {
-        console.log("CHECKOUT SESSION HIT");
-
         const session = event.data.object as Stripe.Checkout.Session;
 
         const userId = session.metadata?.userId ?? null;
@@ -97,10 +94,13 @@ export async function POST(req: Request) {
             ? session.subscription
             : session.subscription?.id ?? null;
 
-        console.log("SESSION USER ID:", userId);
-        console.log("SESSION PLAN FROM METADATA:", planFromSession);
-        console.log("SESSION CUSTOMER ID:", customerId);
-        console.log("SESSION SUBSCRIPTION ID:", subscriptionId);
+        console.log("CHECKOUT SESSION:", {
+          sessionId: session.id,
+          userId,
+          planFromSession,
+          customerId,
+          subscriptionId,
+        });
 
         if (!userId || !customerId || !subscriptionId) {
           console.warn(
@@ -121,16 +121,15 @@ export async function POST(req: Request) {
           getPlanFromPriceId(priceId) ??
           (planFromSession as PaidPlanName | null);
 
-        console.log("CHECKOUT SUB PRICE ID:", priceId);
-        console.log("CHECKOUT RESOLVED PLAN:", plan);
-        console.log("CHECKOUT SUB STATUS:", subscription.status);
-
         if (!plan) {
-          console.warn("No plan resolved from checkout.session.completed");
+          console.warn("No plan resolved from checkout.session.completed", {
+            priceId,
+            planFromSession,
+          });
           break;
         }
 
-        const updated = await updateUserSubscriptionFromStripe({
+        await updateUserSubscriptionFromStripe({
           userId,
           plan,
           stripeCustomerId: customerId,
@@ -139,24 +138,22 @@ export async function POST(req: Request) {
           subscriptionStatus: subscription.status,
         });
 
-        console.log("CHECKOUT UPDATED PROFILE:", updated);
+        console.log("CHECKOUT PROFILE UPDATED:", {
+          userId,
+          plan,
+          customerId,
+          subscriptionId: subscription.id,
+          subscriptionStatus: subscription.status,
+        });
+
         break;
       }
 
       case "customer.subscription.created":
       case "customer.subscription.updated": {
-        console.log("SUBSCRIPTION EVENT HIT:", event.type);
-
         const subscription = event.data.object as Stripe.Subscription;
 
         const userId = await resolveUserIdFromSubscription(subscription);
-        console.log("SUBSCRIPTION RESOLVED USER ID:", userId);
-
-        if (!userId) {
-          console.warn(`${event.type}: userId not found`);
-          break;
-        }
-
         const customerId =
           typeof subscription.customer === "string"
             ? subscription.customer
@@ -165,17 +162,30 @@ export async function POST(req: Request) {
         const priceId = subscription.items.data[0]?.price?.id ?? null;
         const plan = getPlanFromPriceId(priceId);
 
-        console.log("SUBSCRIPTION CUSTOMER ID:", customerId);
-        console.log("SUBSCRIPTION PRICE ID:", priceId);
-        console.log("SUBSCRIPTION PLAN:", plan);
-        console.log("SUBSCRIPTION STATUS:", subscription.status);
+        console.log("SUBSCRIPTION EVENT:", {
+          type: event.type,
+          subscriptionId: subscription.id,
+          userId,
+          customerId,
+          priceId,
+          plan,
+          status: subscription.status,
+        });
 
-        if (!customerId || !plan) {
-          console.warn(`${event.type}: missing customerId or plan`);
+        if (!userId) {
+          console.warn(`${event.type}: userId not found`);
           break;
         }
 
-        const updated = await updateUserSubscriptionFromStripe({
+        if (!customerId || !plan) {
+          console.warn(`${event.type}: missing customerId or plan`, {
+            customerId,
+            priceId,
+          });
+          break;
+        }
+
+        await updateUserSubscriptionFromStripe({
           userId,
           plan,
           stripeCustomerId: customerId,
@@ -184,25 +194,39 @@ export async function POST(req: Request) {
           subscriptionStatus: subscription.status,
         });
 
-        console.log("SUBSCRIPTION UPDATED PROFILE:", updated);
+        console.log("SUBSCRIPTION PROFILE UPDATED:", {
+          userId,
+          plan,
+          customerId,
+          subscriptionId: subscription.id,
+          subscriptionStatus: subscription.status,
+        });
+
         break;
       }
 
       case "customer.subscription.deleted": {
-        console.log("SUBSCRIPTION DELETE HIT");
-
         const subscription = event.data.object as Stripe.Subscription;
-
         const userId = await resolveUserIdFromSubscription(subscription);
-        console.log("DELETE RESOLVED USER ID:", userId);
+
+        console.log("SUBSCRIPTION DELETE:", {
+          subscriptionId: subscription.id,
+          userId,
+        });
 
         if (!userId) {
           console.warn("customer.subscription.deleted: userId not found");
           break;
         }
 
-        const reset = await resetUserToFreePlan(userId);
-        console.log("RESET PROFILE TO FREE:", reset);
+        await resetUserToFreePlan(userId);
+        console.log("PROFILE RESET TO FREE:", userId);
+        break;
+      }
+
+      case "invoice.paid":
+      case "invoice.payment_failed": {
+        console.log("INVOICE EVENT:", event.type);
         break;
       }
 
@@ -211,7 +235,7 @@ export async function POST(req: Request) {
         break;
     }
 
-    return NextResponse.json({ received: true });
+    return NextResponse.json({ received: true }, { status: 200 });
   } catch (err: any) {
     console.error("STRIPE_WEBHOOK_HANDLER_ERROR:", err);
     return new NextResponse(err?.message ?? "Webhook handler failed", {
