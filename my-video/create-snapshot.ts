@@ -1,3 +1,8 @@
+if (process.env.VERCEL) {
+  console.log("[create-snapshot] Skipping snapshot generation on Vercel.");
+  process.exit(0);
+}
+
 import { put } from "@vercel/blob";
 import { addBundleToSandbox, createSandbox } from "@remotion/vercel";
 import { bundleRemotionProject } from "./src/app/api/helpers";
