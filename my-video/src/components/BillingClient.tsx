@@ -13,9 +13,6 @@ type Props = {
   monthlyVideoLimit: number | null;
 };
 
-const BILLING_MODE =
-  process.env.NEXT_PUBLIC_BILLING_MODE?.toLowerCase() ?? "test";
-
 const PLAN_CARDS: Array<{
   plan: PlanName;
   title: string;
@@ -189,26 +186,6 @@ export function BillingClient(props: Props) {
     setLoadingPlan(plan);
 
     try {
-      if (BILLING_MODE === "test") {
-        const res = await fetch("/api/billing/plan", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ plan }),
-        });
-
-        const data = await res.json();
-
-        if (!data?.ok) {
-          throw new Error(data?.error ?? "Plan update failed");
-        }
-
-        setMessage("Plan updated successfully. Refreshing...");
-        window.location.reload();
-        return;
-      }
-
       if (isPaid) {
         const res = await fetch("/api/billing/checkout", {
           method: "POST",
@@ -220,7 +197,7 @@ export function BillingClient(props: Props) {
 
         const data = await res.json();
 
-        if (!data?.ok) {
+        if (!res.ok || !data?.ok) {
           throw new Error(data?.error ?? "Checkout start failed");
         }
 
@@ -230,24 +207,24 @@ export function BillingClient(props: Props) {
         }
 
         throw new Error("Checkout URL not returned");
-      } else {
-        const res = await fetch("/api/billing/plan", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ plan }),
-        });
-
-        const data = await res.json();
-
-        if (!data?.ok) {
-          throw new Error(data?.error ?? "Plan update failed");
-        }
-
-        setMessage("Plan updated successfully. Refreshing...");
-        window.location.reload();
       }
+
+      const res = await fetch("/api/billing/plan", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ plan }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.error ?? "Plan update failed");
+      }
+
+      setMessage("Plan updated successfully. Refreshing...");
+      window.location.reload();
     } catch (err: any) {
       setMessage(err?.message ?? "Billing action failed");
     } finally {
@@ -258,11 +235,7 @@ export function BillingClient(props: Props) {
   return (
     <>
       <div style={styles.summary}>
-        <div style={styles.badge}>
-          {BILLING_MODE === "test"
-            ? "Billing Test Mode"
-            : "Stripe Billing Mode"}
-        </div>
+        <div style={styles.badge}>Stripe Billing</div>
 
         <div style={styles.summaryRow}>
           <div style={styles.stat}>

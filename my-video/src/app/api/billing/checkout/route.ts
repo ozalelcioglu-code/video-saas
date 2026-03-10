@@ -15,9 +15,6 @@ function isPaidPlan(value: unknown): value is PaidPlanName {
 
 export async function POST(req: Request) {
   try {
-    console.log("NEW CHECKOUT ROUTE HIT");
-    console.log("BILLING_MODE =", process.env.BILLING_MODE);
-
     const session = await auth.api.getSession({
       headers: req.headers,
     });
@@ -50,14 +47,13 @@ export async function POST(req: Request) {
     }
 
     const plan = rawPlan;
-    const billingMode = process.env.BILLING_MODE ?? "test";
+    const billingMode = (process.env.BILLING_MODE ?? "stripe").toLowerCase();
 
     if (billingMode !== "stripe") {
       return NextResponse.json(
         {
           ok: false,
-          error: "Stripe billing is not enabled yet.",
-          plan,
+          error: "Stripe billing is not enabled.",
         },
         { status: 400 }
       );
@@ -86,7 +82,11 @@ export async function POST(req: Request) {
       await updateUserStripeCustomerId(userId, customer.id);
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const appUrl =
+      process.env.NEXT_PUBLIC_APP_URL ??
+      process.env.BETTER_AUTH_URL ??
+      "http://localhost:3000";
+
     const priceId = STRIPE_PRICE_MAP[plan];
 
     if (!priceId) {
