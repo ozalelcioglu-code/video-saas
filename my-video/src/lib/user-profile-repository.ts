@@ -1,6 +1,17 @@
 import { sql } from "./db";
 import { getRemainingCredits, PLAN_RULES, type PlanName } from "./plans";
 
+type StripeManagedPlan = "starter" | "pro" | "agency";
+
+function getPlanLimits(plan: PlanName) {
+  const rule = PLAN_RULES[plan];
+
+  return {
+    monthlyVideoLimit: rule.monthlyVideoLimit,
+    maxDurationSec: rule.maxDurationSec,
+  };
+}
+
 export async function ensureUserProfile(input: {
   userId: string;
   email: string;
@@ -41,6 +52,17 @@ export async function getUserProfile(userId: string) {
     select *
     from user_profiles
     where user_id = ${userId}::text
+    limit 1
+  `;
+
+  return rows[0] ?? null;
+}
+
+export async function getUserProfileByStripeCustomerId(stripeCustomerId: string) {
+  const rows = await sql`
+    select *
+    from user_profiles
+    where stripe_customer_id = ${stripeCustomerId}
     limit 1
   `;
 
@@ -113,6 +135,52 @@ export async function updateUserStripeCustomerId(
     update user_profiles
     set
       stripe_customer_id = ${customerId},
+      updated_at = now()
+    where user_id = ${userId}::text
+    returning *
+  `;
+
+  return updated[0] ?? null;
+}
+
+export async function updateUserSubscriptionFromStripe(input: {
+  userId: string;
+  plan: StripeManagedPlan;
+  stripeCustomerId: string;
+  stripeSubscriptionId: string;
+  stripePriceId: string | null;
+  subscriptionStatus: string;
+}) {
+  const limits = getPlanLimits(input.plan);
+
+  const updated = await sql`
+    update user_profiles
+    set
+      plan = ${input.plan},
+      stripe_customer_id = ${input.stripeCustomerId},
+      stripe_subscription_id = ${input.stripeSubscriptionId},
+      stripe_price_id = ${input.stripePriceId},
+      subscription_status = ${input.subscriptionStatus},
+      monthly_video_limit = ${limits.monthlyVideoLimit},
+      max_video_seconds = ${limits.maxDurationSec},
+      updated_at = now()
+    where user_id = ${input.userId}::text
+    returning *
+  `;
+
+  return updated[0] ?? null;
+}
+
+export async function resetUserToFreePlan(userId: string) {
+  const limits = getPlanLimits("free");
+
+  const updated = await sql`
+    update user_profiles
+    set
+      plan = 'free',
+      subscription_status = 'canceled',
+      monthly_video_limit = ${limits.monthlyVideoLimit},
+      max_video_seconds = ${limits.maxDurationSec},
       updated_at = now()
     where user_id = ${userId}::text
     returning *
