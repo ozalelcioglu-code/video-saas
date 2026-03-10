@@ -22,7 +22,9 @@ const stripe = new Stripe(stripeSecretKey);
 
 type PaidPlanName = "starter" | "pro" | "agency";
 
-function getPlanFromPriceId(priceId: string | null | undefined): PaidPlanName | null {
+function getPlanFromPriceId(
+  priceId: string | null | undefined
+): PaidPlanName | null {
   if (!priceId) return null;
 
   if (priceId === process.env.STRIPE_PRICE_STARTER) return "starter";
@@ -32,7 +34,9 @@ function getPlanFromPriceId(priceId: string | null | undefined): PaidPlanName | 
   return null;
 }
 
-async function resolveUserIdFromSubscription(subscription: Stripe.Subscription) {
+async function resolveUserIdFromSubscription(
+  subscription: Stripe.Subscription
+) {
   const metadataUserId = subscription.metadata?.userId;
   if (metadataUserId) return metadataUserId;
 
@@ -51,6 +55,7 @@ export async function POST(req: Request) {
   const signature = req.headers.get("stripe-signature");
 
   if (!signature) {
+    console.error("WEBHOOK ERROR: Missing stripe-signature header");
     return new NextResponse("Missing stripe-signature header", { status: 400 });
   }
 
@@ -60,16 +65,23 @@ export async function POST(req: Request) {
 
   try {
     event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
+    console.log("WEBHOOK RAW OK");
+    console.log("WEBHOOK EVENT TYPE:", event.type);
   } catch (err: any) {
     console.error("STRIPE_WEBHOOK_SIGNATURE_ERROR:", err?.message || err);
-    return new NextResponse(`Webhook Error: ${err?.message || "Invalid signature"}`, {
-      status: 400,
-    });
+    return new NextResponse(
+      `Webhook Error: ${err?.message || "Invalid signature"}`,
+      {
+        status: 400,
+      }
+    );
   }
 
   try {
     switch (event.type) {
       case "checkout.session.completed": {
+        console.log("CHECKOUT SESSION HIT");
+
         const session = event.data.object as Stripe.Checkout.Session;
 
         const userId = session.metadata?.userId ?? null;
@@ -85,8 +97,15 @@ export async function POST(req: Request) {
             ? session.subscription
             : session.subscription?.id ?? null;
 
+        console.log("SESSION USER ID:", userId);
+        console.log("SESSION PLAN FROM METADATA:", planFromSession);
+        console.log("SESSION CUSTOMER ID:", customerId);
+        console.log("SESSION SUBSCRIPTION ID:", subscriptionId);
+
         if (!userId || !customerId || !subscriptionId) {
-          console.warn("checkout.session.completed missing userId/customerId/subscriptionId");
+          console.warn(
+            "checkout.session.completed missing userId/customerId/subscriptionId"
+          );
           break;
         }
 
@@ -98,14 +117,20 @@ export async function POST(req: Request) {
 
         const subscription = await stripe.subscriptions.retrieve(subscriptionId);
         const priceId = subscription.items.data[0]?.price?.id ?? null;
-        const plan = getPlanFromPriceId(priceId) ?? (planFromSession as PaidPlanName | null);
+        const plan =
+          getPlanFromPriceId(priceId) ??
+          (planFromSession as PaidPlanName | null);
+
+        console.log("CHECKOUT SUB PRICE ID:", priceId);
+        console.log("CHECKOUT RESOLVED PLAN:", plan);
+        console.log("CHECKOUT SUB STATUS:", subscription.status);
 
         if (!plan) {
           console.warn("No plan resolved from checkout.session.completed");
           break;
         }
 
-        await updateUserSubscriptionFromStripe({
+        const updated = await updateUserSubscriptionFromStripe({
           userId,
           plan,
           stripeCustomerId: customerId,
@@ -114,14 +139,19 @@ export async function POST(req: Request) {
           subscriptionStatus: subscription.status,
         });
 
+        console.log("CHECKOUT UPDATED PROFILE:", updated);
         break;
       }
 
       case "customer.subscription.created":
       case "customer.subscription.updated": {
+        console.log("SUBSCRIPTION EVENT HIT:", event.type);
+
         const subscription = event.data.object as Stripe.Subscription;
 
         const userId = await resolveUserIdFromSubscription(subscription);
+        console.log("SUBSCRIPTION RESOLVED USER ID:", userId);
+
         if (!userId) {
           console.warn(`${event.type}: userId not found`);
           break;
@@ -135,12 +165,17 @@ export async function POST(req: Request) {
         const priceId = subscription.items.data[0]?.price?.id ?? null;
         const plan = getPlanFromPriceId(priceId);
 
+        console.log("SUBSCRIPTION CUSTOMER ID:", customerId);
+        console.log("SUBSCRIPTION PRICE ID:", priceId);
+        console.log("SUBSCRIPTION PLAN:", plan);
+        console.log("SUBSCRIPTION STATUS:", subscription.status);
+
         if (!customerId || !plan) {
           console.warn(`${event.type}: missing customerId or plan`);
           break;
         }
 
-        await updateUserSubscriptionFromStripe({
+        const updated = await updateUserSubscriptionFromStripe({
           userId,
           plan,
           stripeCustomerId: customerId,
@@ -149,29 +184,38 @@ export async function POST(req: Request) {
           subscriptionStatus: subscription.status,
         });
 
+        console.log("SUBSCRIPTION UPDATED PROFILE:", updated);
         break;
       }
 
       case "customer.subscription.deleted": {
+        console.log("SUBSCRIPTION DELETE HIT");
+
         const subscription = event.data.object as Stripe.Subscription;
 
         const userId = await resolveUserIdFromSubscription(subscription);
+        console.log("DELETE RESOLVED USER ID:", userId);
+
         if (!userId) {
           console.warn("customer.subscription.deleted: userId not found");
           break;
         }
 
-        await resetUserToFreePlan(userId);
+        const reset = await resetUserToFreePlan(userId);
+        console.log("RESET PROFILE TO FREE:", reset);
         break;
       }
 
       default:
+        console.log("WEBHOOK EVENT IGNORED:", event.type);
         break;
     }
 
     return NextResponse.json({ received: true });
   } catch (err: any) {
     console.error("STRIPE_WEBHOOK_HANDLER_ERROR:", err);
-    return new NextResponse(err?.message ?? "Webhook handler failed", { status: 500 });
+    return new NextResponse(err?.message ?? "Webhook handler failed", {
+      status: 500,
+    });
   }
 }
