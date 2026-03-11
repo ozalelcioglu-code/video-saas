@@ -12,10 +12,8 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
 
-  experimental: {
-    outputFileTracingIncludes: {
-      "/api/render": ["./remotion-bundle/**/*"],
-    },
+  outputFileTracingIncludes: {
+    "/api/render": ["./remotion-bundle/**/*"],
   },
 };
 
