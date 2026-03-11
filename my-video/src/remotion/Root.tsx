@@ -23,6 +23,7 @@ export default function RemotionRoot() {
         height={720}
         defaultProps={{ outProgress: 0 }}
       />
+     
     </>
   );
 }
