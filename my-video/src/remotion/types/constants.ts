@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const COMP_NAME = "MyComp";
+export const COMP_NAME = "Main";
 
 export const VIDEO_FPS = 30;
 export const VIDEO_WIDTH = 1280;
@@ -81,6 +81,6 @@ export const getVideoDimensions = (ratio?: Ratio) => {
       return { width: 1080, height: 1920 };
     case "horizontal":
     default:
-      return { width: 1280, height: 720 };
+      return { width: VIDEO_WIDTH, height: VIDEO_HEIGHT };
   }
 };
