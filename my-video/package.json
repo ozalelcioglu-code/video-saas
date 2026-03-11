@@ -55,7 +55,7 @@
   },
   "scripts": {
   "dev": "next dev",
-  "build": "next build --webpack",
+  "build": "remotion bundle remotion/index.ts --out-dir .remotion && next build",
   "start": "next start",
   "lint": "eslint .",
   "remotion-bundle": "remotion bundle src/remotion/index.ts --out-dir=build",

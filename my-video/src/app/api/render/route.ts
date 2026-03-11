@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import path from "node:path";
+import { access } from "node:fs/promises";
 import {
   addBundleToSandbox,
   createSandbox,
@@ -220,6 +222,19 @@ const normalizeInputProps = (body: unknown): RenderInputProps => {
   };
 };
 
+async function ensureBundleExists() {
+  const bundleDir = path.join(process.cwd(), ".remotion");
+
+  try {
+    await access(bundleDir);
+    return bundleDir;
+  } catch {
+    throw new Error(
+      "Remotion production bundle not found. Make sure package.json build script generates '.remotion' before deploy."
+    );
+  }
+}
+
 export async function POST(req: Request) {
   let sandbox: Awaited<ReturnType<typeof createSandbox>> | null = null;
 
@@ -312,11 +327,13 @@ export async function POST(req: Request) {
       throw new Error("BLOB_READ_WRITE_TOKEN is missing");
     }
 
+    const bundleDir = await ensureBundleExists();
+
     sandbox = await createSandbox();
 
     await addBundleToSandbox({
       sandbox,
-      bundleDir: ".remotion",
+      bundleDir,
     });
 
     const { sandboxFilePath } = await renderMediaOnVercel({
