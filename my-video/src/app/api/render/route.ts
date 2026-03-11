@@ -1,6 +1,4 @@
 import { NextResponse } from "next/server";
-import path from "node:path";
-import { access } from "node:fs/promises";
 import {
   addBundleToSandbox,
   createSandbox,
@@ -16,7 +14,6 @@ export const dynamic = "force-dynamic";
 
 type Ratio = "square" | "vertical" | "horizontal";
 type Mode = "text" | "images" | "product";
-
 type UnknownRecord = Record<string, unknown>;
 
 type RenderScene = {
@@ -222,17 +219,17 @@ const normalizeInputProps = (body: unknown): RenderInputProps => {
   };
 };
 
-async function ensureBundleExists() {
-  const bundleDir = path.join(process.cwd(), ".remotion");
-
-  try {
-    await access(bundleDir);
-    return bundleDir;
-  } catch {
-    throw new Error(
-      "Remotion production bundle not found. Make sure package.json build script generates '.remotion' before deploy."
-    );
-  }
+function serializeError(err: any) {
+  return {
+    name: err?.name ?? null,
+    message: err?.message ?? null,
+    stack: err?.stack ?? null,
+    code: err?.code ?? null,
+    statusCode: err?.statusCode ?? null,
+    cause: err?.cause ?? null,
+    details: err?.details ?? null,
+    response: err?.response ?? null,
+  };
 }
 
 export async function POST(req: Request) {
@@ -288,13 +285,6 @@ export async function POST(req: Request) {
           code: "PLAN_DURATION_LIMIT",
           error: `${planInfo.planLabel} plan allows maximum ${planInfo.maxDurationSec} seconds.`,
           upgradeRequired: true,
-          plan: planInfo.plan,
-          planLabel: planInfo.planLabel,
-          maxDurationSec: planInfo.maxDurationSec,
-          requestedDuration,
-          usedThisMonth: planInfo.usedThisMonth,
-          remainingCredits: planInfo.remainingCredits,
-          monthlyVideoLimit: planInfo.monthlyVideoLimit,
         },
         { status: 403 }
       );
@@ -310,13 +300,6 @@ export async function POST(req: Request) {
           code: "PLAN_MONTHLY_LIMIT",
           error: `${planInfo.planLabel} plan monthly video limit reached.`,
           upgradeRequired: true,
-          plan: planInfo.plan,
-          planLabel: planInfo.planLabel,
-          maxDurationSec: planInfo.maxDurationSec,
-          requestedDuration,
-          usedThisMonth: planInfo.usedThisMonth,
-          remainingCredits: planInfo.remainingCredits,
-          monthlyVideoLimit: planInfo.monthlyVideoLimit,
         },
         { status: 403 }
       );
@@ -327,7 +310,17 @@ export async function POST(req: Request) {
       throw new Error("BLOB_READ_WRITE_TOKEN is missing");
     }
 
-    const bundleDir = await ensureBundleExists();
+    console.log("RENDER_DEBUG_COMP_NAME:", COMP_NAME);
+    console.log(
+      "RENDER_DEBUG_STORYBOARD_SCENES:",
+      inputProps.storyboard?.scenes?.length ?? 0
+    );
+    console.log("RENDER_DEBUG_RATIO:", inputProps.ratio);
+    console.log("RENDER_DEBUG_DURATION:", inputProps.durationSec);
+    console.log(
+      "RENDER_DEBUG_HAS_VIDEO_URLS:",
+      (inputProps.storyboard?.scenes ?? []).map((s) => Boolean(s.videoUrl))
+    );
 
     sandbox = await createSandbox();
 
@@ -336,13 +329,41 @@ export async function POST(req: Request) {
       bundleDir: ".remotion",
     });
 
-    const { sandboxFilePath } = await renderMediaOnVercel({
-      sandbox,
-      compositionId: COMP_NAME,
-      inputProps,
-      codec: "h264",
-      outputFile: "/tmp/video.mp4",
-    });
+    let sandboxFilePath: string;
+
+    try {
+      const renderResult = await renderMediaOnVercel({
+        sandbox,
+        compositionId: COMP_NAME,
+        inputProps,
+        codec: "h264",
+        outputFile: "/tmp/video.mp4",
+      });
+
+      sandboxFilePath = renderResult.sandboxFilePath;
+    } catch (err: any) {
+      const debug = serializeError(err);
+      console.error("RENDER_MEDIA_ON_VERCEL_ERROR:", JSON.stringify(debug, null, 2));
+
+      return NextResponse.json(
+        {
+          status: "error",
+          code: "RENDER_MEDIA_FAILED",
+          error: debug.message || "Render media failed",
+          debug,
+          compName: COMP_NAME,
+          inputSummary: {
+            ratio: inputProps.ratio ?? null,
+            durationSec: inputProps.durationSec ?? null,
+            scenesCount: inputProps.storyboard?.scenes?.length ?? 0,
+            hasVideoUrls: (inputProps.storyboard?.scenes ?? []).map((s) =>
+              Boolean(s.videoUrl)
+            ),
+          },
+        },
+        { status: 500 }
+      );
+    }
 
     const { url } = await uploadToVercelBlob({
       sandbox,
@@ -392,13 +413,15 @@ export async function POST(req: Request) {
       { status: 200 }
     );
   } catch (err: any) {
-    console.error("RENDER_ERROR:", err);
+    const debug = serializeError(err);
+    console.error("RENDER_ERROR:", JSON.stringify(debug, null, 2));
 
     return NextResponse.json(
       {
         status: "error",
         code: "RENDER_FAILED",
-        error: err?.message ?? "Render failed",
+        error: debug.message ?? "Render failed",
+        debug,
       },
       { status: 500 }
     );
