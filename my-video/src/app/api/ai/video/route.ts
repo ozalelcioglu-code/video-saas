@@ -24,16 +24,15 @@ export async function POST(req: Request) {
     console.log("imageUrl:", input.imageUrl);
     console.log("prompt:", input.prompt);
 
-    // Preview mode: Replicate çağrısı yapma
     if (!useRealSceneVideo) {
       return NextResponse.json(
         {
-          ok: true,
-          videoUrl: null,
-          previewMode: true,
-          message: "Preview mode active. Real scene video generation is disabled.",
+          ok: false,
+          code: "SCENE_VIDEO_DISABLED",
+          error:
+            "Real scene video generation is disabled. Set USE_REAL_SCENE_VIDEO=true in production environment variables.",
         },
-        { status: 200 }
+        { status: 400 }
       );
     }
 
@@ -49,9 +48,10 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           ok: false,
-          error: "No videoUrl returned from generateImageToVideo",
+          code: "SCENE_VIDEO_EMPTY",
+          error: "No video URL returned from generateImageToVideo().",
         },
-        { status: 200 }
+        { status: 502 }
       );
     }
 
@@ -59,19 +59,31 @@ export async function POST(req: Request) {
       {
         ok: true,
         videoUrl,
-        previewMode: false,
       },
       { status: 200 }
     );
   } catch (err: any) {
     console.error("Video generation failed:", err);
 
+    if (err?.name === "ZodError") {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "INVALID_REQUEST",
+          error: "Invalid scene video request payload.",
+          details: err.flatten?.() ?? null,
+        },
+        { status: 400 }
+      );
+    }
+
     return NextResponse.json(
       {
         ok: false,
+        code: "SCENE_VIDEO_FAILED",
         error: err?.message ?? "Video generation failed",
       },
-      { status: 200 }
+      { status: 500 }
     );
   }
 }

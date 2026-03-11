@@ -4,8 +4,6 @@ import { NextLogo } from "./MyComp/NextLogo";
 import type { MyCompProps } from "./types/constants";
 
 const FALLBACK_FPS = 30;
-const FALLBACK_WIDTH = 1280;
-const FALLBACK_HEIGHT = 720;
 
 const getSceneFrames = (durationSec: number, fps: number) => {
   const safeDuration =
@@ -35,8 +33,8 @@ export default function RemotionRoot() {
         component={Main}
         durationInFrames={900}
         fps={FALLBACK_FPS}
-        width={FALLBACK_WIDTH}
-        height={FALLBACK_HEIGHT}
+        width={1280}
+        height={720}
         defaultProps={{
           storyboard: {
             ratio: "horizontal",
