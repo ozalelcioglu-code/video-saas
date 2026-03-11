@@ -8,6 +8,7 @@ const FALLBACK_FPS = 30;
 const getSceneFrames = (durationSec: number, fps: number) => {
   const safeDuration =
     Number.isFinite(durationSec) && durationSec > 0 ? durationSec : 3;
+
   return Math.max(1, Math.round(safeDuration * fps));
 };
 
@@ -36,14 +37,18 @@ export default function RemotionRoot() {
         width={1280}
         height={720}
         defaultProps={{
+          title: "AI Video",
+          prompt: "demo prompt",
+          ratio: "horizontal",
           storyboard: {
+            title: "Demo Storyboard",
             ratio: "horizontal",
             scenes: [],
           },
         }}
         calculateMetadata={({ props }) => {
           const typedProps = props as MyCompProps;
-          const ratio = typedProps.storyboard?.ratio;
+          const ratio = typedProps.storyboard?.ratio ?? typedProps.ratio;
           const scenes = typedProps.storyboard?.scenes ?? [];
 
           const totalFrames =
