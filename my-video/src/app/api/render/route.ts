@@ -324,46 +324,48 @@ export async function POST(req: Request) {
 
     sandbox = await createSandbox();
 
-    await addBundleToSandbox({
-      sandbox,
-      bundleDir: ".remotion",
-    });
+    sandbox = await createSandbox();
 
-    let sandboxFilePath: string;
+await addBundleToSandbox({
+  sandbox,
+  bundleDir: "remotion-bundle",
+});
 
-    try {
-      const renderResult = await renderMediaOnVercel({
-        sandbox,
-        compositionId: COMP_NAME,
-        inputProps,
-        codec: "h264",
-        outputFile: "/tmp/video.mp4",
-      });
+let sandboxFilePath: string;
 
-      sandboxFilePath = renderResult.sandboxFilePath;
-    } catch (err: any) {
-      const debug = serializeError(err);
-      console.error("RENDER_MEDIA_ON_VERCEL_ERROR:", JSON.stringify(debug, null, 2));
+try {
+  const renderResult = await renderMediaOnVercel({
+    sandbox,
+    compositionId: COMP_NAME,
+    inputProps,
+    codec: "h264",
+    outputFile: "/tmp/video.mp4",
+  });
 
-      return NextResponse.json(
-        {
-          status: "error",
-          code: "RENDER_MEDIA_FAILED",
-          error: debug.message || "Render media failed",
-          debug,
-          compName: COMP_NAME,
-          inputSummary: {
-            ratio: inputProps.ratio ?? null,
-            durationSec: inputProps.durationSec ?? null,
-            scenesCount: inputProps.storyboard?.scenes?.length ?? 0,
-            hasVideoUrls: (inputProps.storyboard?.scenes ?? []).map((s) =>
-              Boolean(s.videoUrl)
-            ),
-          },
-        },
-        { status: 500 }
-      );
-    }
+  sandboxFilePath = renderResult.sandboxFilePath;
+} catch (err: any) {
+  const debug = serializeError(err);
+  console.error("RENDER_MEDIA_ON_VERCEL_ERROR:", JSON.stringify(debug, null, 2));
+
+  return NextResponse.json(
+    {
+      status: "error",
+      code: "RENDER_MEDIA_FAILED",
+      error: debug.message || "Render media failed",
+      debug,
+      compName: COMP_NAME,
+      inputSummary: {
+        ratio: inputProps.ratio ?? null,
+        durationSec: inputProps.durationSec ?? null,
+        scenesCount: inputProps.storyboard?.scenes?.length ?? 0,
+        hasVideoUrls: (inputProps.storyboard?.scenes ?? []).map((s) =>
+          Boolean(s.videoUrl)
+        ),
+      },
+    },
+    { status: 500 }
+  );
+}
 
     const { url } = await uploadToVercelBlob({
       sandbox,

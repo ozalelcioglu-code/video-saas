@@ -55,8 +55,7 @@
   },
   "scripts": {
   "dev": "next dev",
-  "build": "remotion bundle src/remotion/remotionRoot.ts --out-dir .remotion && next build",
-  "start": "next start",
+  "build": "remotion bundle src/remotion/remotionRoot.ts --out-dir remotion-bundle && next build",  "start": "next start",
   "lint": "eslint .",
   "remotion-bundle": "remotion bundle src/remotion/index.ts --out-dir=build",
   "create-snapshot": "bun create-snapshot.ts",
