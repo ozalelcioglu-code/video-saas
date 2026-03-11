@@ -333,7 +333,7 @@ export async function POST(req: Request) {
 
     await addBundleToSandbox({
       sandbox,
-      bundleDir,
+      bundleDir: ".remotion",
     });
 
     const { sandboxFilePath } = await renderMediaOnVercel({
