@@ -30,6 +30,19 @@ const getMotionPreset = (index: number) => {
   return presets[index % presets.length];
 };
 
+const isRenderableVideoUrl = (url?: string) => {
+  if (!url) return false;
+
+  const lower = url.toLowerCase();
+
+  return (
+    lower.includes(".public.blob.vercel-storage.com") ||
+    lower.includes("blob.vercel-storage.com") ||
+    lower.includes("app.dublesmotion.com") ||
+    lower.includes("vercel-storage.com")
+  );
+};
+
 const MediaLayer: React.FC<{
   scene: SceneItem;
   sceneIndex: number;
@@ -63,7 +76,9 @@ const MediaLayer: React.FC<{
     transform: `scale(${scale}) translate(${translateX}%, ${translateY}%)`,
   };
 
-  if (scene.videoUrl) {
+  // SADECE güvenli / kendi host ettiğimiz video URL'lerini render et
+  // replicate.delivery gibi geçici URL'ler final render'da 400 patlatabiliyor
+  if (scene.videoUrl && isRenderableVideoUrl(scene.videoUrl)) {
     return (
       <OffthreadVideo
         src={scene.videoUrl}
@@ -77,6 +92,7 @@ const MediaLayer: React.FC<{
     );
   }
 
+  // Güvenli fallback: scene image ile final video oluştur
   if (scene.imageUrl) {
     return <Img src={scene.imageUrl} style={animatedStyle} />;
   }

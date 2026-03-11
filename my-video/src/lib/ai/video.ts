@@ -1,4 +1,5 @@
 import Replicate from "replicate";
+import { put } from "@vercel/blob";
 
 const replicate = new Replicate({
   auth: process.env.REPLICATE_API_TOKEN,
@@ -78,9 +79,10 @@ async function createPredictionWithRetry(input: {
       const retryAfterSec = Number(retryAfterHeader);
 
       if (status === 429 && attempt < maxAttempts) {
-        const waitMs = Number.isFinite(retryAfterSec) && retryAfterSec > 0
-          ? retryAfterSec * 1000
-          : attempt * 8000;
+        const waitMs =
+          Number.isFinite(retryAfterSec) && retryAfterSec > 0
+            ? retryAfterSec * 1000
+            : attempt * 8000;
 
         console.warn(
           `Replicate rate limited (429). Waiting ${Math.round(
@@ -99,11 +101,59 @@ async function createPredictionWithRetry(input: {
   throw new Error("Replicate prediction creation failed after retries");
 }
 
+async function uploadRemoteVideoToBlob(remoteUrl: string) {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    throw new Error("Missing env: BLOB_READ_WRITE_TOKEN");
+  }
+
+  console.log("DOWNLOADING REPLICATE VIDEO:", remoteUrl);
+
+  const response = await fetch(remoteUrl);
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to download Replicate video. Status: ${response.status}`
+    );
+  }
+
+  const contentType =
+    response.headers.get("content-type")?.toLowerCase() || "video/mp4";
+
+  const arrayBuffer = await response.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+
+  if (!buffer.length) {
+    throw new Error("Downloaded Replicate video is empty");
+  }
+
+  const extension = contentType.includes("webm") ? "webm" : "mp4";
+  const fileName = `scene-videos/${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2)}.${extension}`;
+
+  console.log("UPLOADING VIDEO TO BLOB:", fileName);
+
+  const blob = await put(fileName, buffer, {
+    access: "public",
+    contentType,
+    token: process.env.BLOB_READ_WRITE_TOKEN,
+    addRandomSuffix: false,
+  });
+
+  console.log("BLOB VIDEO URL:", blob.url);
+
+  return blob.url;
+}
+
 export async function generateImageToVideo(
   input: GenerateImageToVideoInput
 ): Promise<string> {
   if (!process.env.REPLICATE_API_TOKEN) {
     throw new Error("Missing env: REPLICATE_API_TOKEN");
+  }
+
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    throw new Error("Missing env: BLOB_READ_WRITE_TOKEN");
   }
 
   if (!input.image?.trim()) {
@@ -131,15 +181,20 @@ export async function generateImageToVideo(
 
   for (let i = 0; i < maxPollAttempts; i++) {
     if (current.status === "succeeded") {
-      const videoUrl = extractVideoUrl(current.output);
+      const replicateVideoUrl = extractVideoUrl(current.output);
       console.log("REPLICATE SUCCEEDED OUTPUT:", current.output);
 
-      if (videoUrl) {
-        console.log("REPLICATE VIDEO URL:", videoUrl);
-        return videoUrl;
+      if (!replicateVideoUrl) {
+        throw new Error("Prediction succeeded but no video URL found in output");
       }
 
-      throw new Error("Prediction succeeded but no video URL found in output");
+      console.log("REPLICATE VIDEO URL:", replicateVideoUrl);
+
+      const blobUrl = await uploadRemoteVideoToBlob(replicateVideoUrl);
+
+      console.log("FINAL SCENE VIDEO URL:", blobUrl);
+
+      return blobUrl;
     }
 
     if (current.status === "failed" || current.status === "canceled") {
