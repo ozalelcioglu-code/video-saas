@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 import { auth } from "../../../../lib/auth";
-import { stripe, STRIPE_PRICE_MAP } from "../../../../lib/stripe";
+import {
+  stripe,
+  STRIPE_PRICE_MAP,
+  type PaidPlanName,
+} from "../../../../lib/stripe";
 import {
   ensureUserProfile,
   getUserProfile,
   updateUserStripeCustomerId,
 } from "../../../../lib/user-profile-repository";
-
-type PaidPlanName = "starter" | "pro" | "agency";
 
 function isPaidPlan(value: unknown): value is PaidPlanName {
   return value === "starter" || value === "pro" || value === "agency";
@@ -102,6 +104,7 @@ export async function POST(req: Request) {
     const checkout = await stripe.checkout.sessions.create({
       mode: "subscription",
       customer: customerId,
+      client_reference_id: userId,
       line_items: [
         {
           price: priceId,
@@ -140,7 +143,7 @@ export async function POST(req: Request) {
       { status: 200 }
     );
   } catch (err: any) {
-    console.error("STRIPE_CHECKOUT_ERROR:", err);
+    console.error("STRIPE_CHECKOUT_ERROR:", err?.message || err);
 
     return NextResponse.json(
       {

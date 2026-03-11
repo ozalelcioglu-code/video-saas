@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import {
+  stripe,
+  STRIPE_PRICE_MAP,
+  type PaidPlanName,
+} from "../../../../lib/stripe";
+import {
   ensureUserProfile,
   getUserProfileByStripeCustomerId,
   updateUserSubscriptionFromStripe,
@@ -9,31 +14,22 @@ import {
 
 export const runtime = "nodejs";
 
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
-if (!stripeSecretKey) {
-  throw new Error("STRIPE_SECRET_KEY is not set");
-}
 
 if (!webhookSecret) {
   throw new Error("STRIPE_WEBHOOK_SECRET is not set");
 }
-
-const stripe = new Stripe(stripeSecretKey);
-
-type PaidPlanName = "starter" | "pro" | "agency";
 
 function getPlanFromPriceId(
   priceId: string | null | undefined
 ): PaidPlanName | null {
   if (!priceId) return null;
 
-  if (priceId === process.env.STRIPE_PRICE_STARTER) return "starter";
-  if (priceId === process.env.STRIPE_PRICE_PRO) return "pro";
-  if (priceId === process.env.STRIPE_PRICE_AGENCY) return "agency";
+  const entry = Object.entries(STRIPE_PRICE_MAP).find(
+    ([, mappedPriceId]) => mappedPriceId === priceId
+  );
 
-  return null;
+  return entry ? (entry[0] as PaidPlanName) : null;
 }
 
 async function resolveUserIdFromSubscription(
@@ -67,7 +63,11 @@ export async function POST(req: Request) {
 
   try {
     event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
-    console.log("WEBHOOK VERIFIED:", event.type, event.id);
+    console.log("WEBHOOK VERIFIED:", {
+      id: event.id,
+      type: event.type,
+      livemode: event.livemode,
+    });
   } catch (err: any) {
     console.error("STRIPE_WEBHOOK_SIGNATURE_ERROR:", err?.message || err);
     return new NextResponse(
@@ -81,7 +81,9 @@ export async function POST(req: Request) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
 
-        const userId = session.metadata?.userId ?? null;
+        const userId =
+          session.metadata?.userId ?? session.client_reference_id ?? null;
+
         const planFromSession = session.metadata?.plan ?? null;
 
         const customerId =
@@ -100,11 +102,12 @@ export async function POST(req: Request) {
           planFromSession,
           customerId,
           subscriptionId,
+          metadata: session.metadata,
         });
 
         if (!userId || !customerId || !subscriptionId) {
           console.warn(
-            "checkout.session.completed missing userId/customerId/subscriptionId"
+            "CHECKOUT SKIPPED: missing userId/customerId/subscriptionId"
           );
           break;
         }
@@ -121,8 +124,15 @@ export async function POST(req: Request) {
           getPlanFromPriceId(priceId) ??
           (planFromSession as PaidPlanName | null);
 
+        console.log("CHECKOUT SUBSCRIPTION:", {
+          subscriptionId: subscription.id,
+          status: subscription.status,
+          priceId,
+          resolvedPlan: plan,
+        });
+
         if (!plan) {
-          console.warn("No plan resolved from checkout.session.completed", {
+          console.warn("CHECKOUT SKIPPED: plan could not be resolved", {
             priceId,
             planFromSession,
           });
@@ -168,17 +178,18 @@ export async function POST(req: Request) {
           userId,
           customerId,
           priceId,
-          plan,
+          resolvedPlan: plan,
           status: subscription.status,
+          metadata: subscription.metadata,
         });
 
         if (!userId) {
-          console.warn(`${event.type}: userId not found`);
+          console.warn("SUBSCRIPTION SKIPPED: userId not found");
           break;
         }
 
         if (!customerId || !plan) {
-          console.warn(`${event.type}: missing customerId or plan`, {
+          console.warn("SUBSCRIPTION SKIPPED: missing customerId or plan", {
             customerId,
             priceId,
           });
@@ -212,15 +223,16 @@ export async function POST(req: Request) {
         console.log("SUBSCRIPTION DELETE:", {
           subscriptionId: subscription.id,
           userId,
+          metadata: subscription.metadata,
         });
 
         if (!userId) {
-          console.warn("customer.subscription.deleted: userId not found");
+          console.warn("DELETE SKIPPED: userId not found");
           break;
         }
 
         await resetUserToFreePlan(userId);
-        console.log("PROFILE RESET TO FREE:", userId);
+        console.log("PROFILE RESET TO FREE:", { userId });
         break;
       }
 
@@ -237,9 +249,9 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ received: true }, { status: 200 });
   } catch (err: any) {
-    console.error("STRIPE_WEBHOOK_HANDLER_ERROR:", err);
+    console.error("STRIPE_WEBHOOK_HANDLER_ERROR:", err?.message || err);
     return new NextResponse(err?.message ?? "Webhook handler failed", {
-      status: 500,
-    });
+      status: 500 }
+    );
   }
 }
