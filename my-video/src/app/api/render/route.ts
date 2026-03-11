@@ -236,6 +236,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           status: "error",
+          code: "UNAUTHORIZED",
           error: "Unauthorized",
         },
         { status: 401 }
@@ -269,7 +270,16 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           status: "error",
+          code: "PLAN_DURATION_LIMIT",
           error: `${planInfo.planLabel} plan allows maximum ${planInfo.maxDurationSec} seconds.`,
+          upgradeRequired: true,
+          plan: planInfo.plan,
+          planLabel: planInfo.planLabel,
+          maxDurationSec: planInfo.maxDurationSec,
+          requestedDuration,
+          usedThisMonth: planInfo.usedThisMonth,
+          remainingCredits: planInfo.remainingCredits,
+          monthlyVideoLimit: planInfo.monthlyVideoLimit,
         },
         { status: 403 }
       );
@@ -282,7 +292,16 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           status: "error",
+          code: "PLAN_MONTHLY_LIMIT",
           error: `${planInfo.planLabel} plan monthly video limit reached.`,
+          upgradeRequired: true,
+          plan: planInfo.plan,
+          planLabel: planInfo.planLabel,
+          maxDurationSec: planInfo.maxDurationSec,
+          requestedDuration,
+          usedThisMonth: planInfo.usedThisMonth,
+          remainingCredits: planInfo.remainingCredits,
+          monthlyVideoLimit: planInfo.monthlyVideoLimit,
         },
         { status: 403 }
       );
@@ -361,6 +380,7 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         status: "error",
+        code: "RENDER_FAILED",
         error: err?.message ?? "Render failed",
       },
       { status: 500 }

@@ -2,6 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AppSidebar } from "../components/AppSidebar";
+import {
+  getInitialLanguage,
+  type AppLanguage,
+} from "../lib/i18n";
+
 type Ratio = "square" | "vertical" | "horizontal";
 type Mode = "images" | "text" | "product";
 
@@ -23,7 +28,7 @@ type StoryboardScene = {
 };
 
 type StoryboardData = {
-  language?: "en" | "tr";
+  language?: "en" | "tr" | "de";
   title: string;
   ratio?: Ratio;
   brand_tone: {
@@ -37,18 +42,6 @@ type StoryboardData = {
     captions?: string[];
   };
   scenes: StoryboardScene[];
-};
-
-const MODE_LABEL: Record<Mode, string> = {
-  images: "Image to Video",
-  text: "Text to Video",
-  product: "URL to Video",
-};
-
-const RATIO_LABEL: Record<Ratio, string> = {
-  square: "Square (1:1)",
-  vertical: "Vertical (9:16)",
-  horizontal: "Horizontal (16:9)",
 };
 
 function clamp(n: number, min: number, max: number) {
@@ -114,7 +107,412 @@ async function readSSEStream(
   }
 }
 
+const PAGE_TRANSLATIONS = {
+  tr: {
+    mode: {
+      images: "Görselden Videoya",
+      text: "Metinden Videoya",
+      product: "URL'den Videoya",
+    },
+    ratio: {
+      square: "Kare (1:1)",
+      vertical: "Dikey (9:16)",
+      horizontal: "Yatay (16:9)",
+    },
+    page: {
+      title: "AI Video Oluştur",
+      subtitle:
+        "Metin, yüklenen görseller veya ürün bağlantılarından sinematik reklam videoları üretin. Mevcut motorlarınız bozulmadan deneyimi daha temiz hale getirir.",
+      projectSetup: "Proje Kurulumu",
+      projectSetupSub:
+        "Markanızı, kaynak türünü, sahneleri ve üretim akışını tek bir çalışma alanından yönetin.",
+      preview: "Önizleme",
+      previewSub: "Render tamamlandığında final çıktı burada görünür.",
+      quickSummary: "Hızlı Özet",
+      quickSummarySub:
+        "Aktif proje ve üretim durumu için hızlı genel bakış.",
+      progress: "İlerleme",
+      ready: "Hazır",
+      done: "Tamamlandı",
+      idle: "Boşta",
+      error: "Hata",
+      rendering: "Render alınıyor",
+    },
+    fields: {
+      logo: "Logo",
+      images: "Görseller",
+      aiIdea: "AI Reklam Fikri",
+      storyboardTitle: "Storyboard Başlığı",
+      hook: "Giriş Cümlesi",
+      cta: "Harekete Geçirici Mesaj",
+      bodyLines: "Ana Metin Satırları",
+      scenes: "Sahneler",
+      sceneTitle: "Sahne Başlığı",
+      onScreenText: "Ekran Üzeri Metin",
+      duration: "Süre",
+      scenePrompt: "Sahne Promptu",
+      imagePrompt: "Görsel Promptu",
+      productUrl: "Ürün URL",
+      productTitle: "Ürün Başlığı",
+      highlights: "Öne Çıkanlar",
+      assets: "Varlıklar",
+      brand: "Marka",
+      slogan: "Slogan",
+      descriptionScript: "Açıklama / Metin",
+      format: "Format",
+      projectBrand: "Proje Markası",
+      headlineCta: "Başlık / CTA",
+      sceneStatus: "Sahne Durumu",
+      currentPlan: "Mevcut plan",
+      remainingCredits: "Kalan kredi",
+      maxDuration: "Maksimum süre",
+      usedThisMonth: "Bu ay kullanım",
+    },
+    hints: {
+      logo: "En temiz marka sonucu için kare ve şeffaf bir logo yükleyin.",
+      images: "En fazla 6 görsel yükleyin. Temiz ve yüksek çözünürlüklü içerikler kullanın.",
+      aiIdea:
+        "Bu fikir storyboard üretimini, sahne promptlarını, görselleri ve final hareketli klipleri yönlendirir.",
+      productUrl:
+        "İleride URL taraması başlık, görseller ve öne çıkanları otomatik doldurabilir.",
+      description:
+        "Bunu kısa ve etkili tutun. Reklam yönünü şekillendirir.",
+    },
+    buttons: {
+      generateStoryboard: "Storyboard Oluştur",
+      generatingStoryboard: "Storyboard Oluşturuluyor...",
+      generateSceneVideos: "Sahne Videolarını Üret",
+      generateFinalVideo: "Final Videoyu Oluştur",
+      rendering: "Render Alınıyor...",
+      reset: "Sıfırla",
+      removeLine: "Satırı Sil",
+      addBodyLine: "Metin Satırı Ekle",
+      removeScene: "Sahneyi Sil",
+      addScene: "Sahne Ekle",
+      downloadMp4: "MP4 İndir",
+      createAnother: "Yeni Video Oluştur",
+      choosePlan: "Plan Seç",
+      close: "Kapat",
+    },
+    states: {
+      noPreviewYet: "Henüz önizleme yok",
+      renderingYourVideo: "Videonuz oluşturuluyor...",
+      idleHelp:
+        "Önce storyboard ve sahne videolarını oluşturun, ardından final videoyu render alın.",
+      renderingHelp:
+        "Sistem sahneleri işliyor ve final çıktıyı hazırlıyor.",
+      errorHelp: "Sorunu düzeltip üretimi tekrar başlatın.",
+      sceneVideosGenerated: "Sahne videoları oluşturuldu",
+      preparingRequest: "İstek hazırlanıyor...",
+      baseUrlNotReady: "Base URL hazır değil",
+      renderComplete: "Render tamamlandı",
+      renderFailed: "Render başarısız",
+      logoUploadFailed: "Logo yükleme başarısız",
+      imageUploadFailed: "Görsel yükleme başarısız",
+      sceneVideoGenerationFailed: "Sahne video üretimi başarısız",
+      generatingSceneVideos: "Sahne videoları oluşturuluyor...",
+      generateSceneVideoXofY: "Sahne videosu oluşturuluyor {current}/{total}...",
+      image: "Görsel",
+      video: "Video",
+      yes: "Evet",
+      no: "Hayır",
+      assets: "Varlıklar",
+      mode: "Mod",
+      scenes: "Sahneler",
+    },
+    placeholders: {
+      aiIdea: "Berlin'deki bir kahve dükkanı için sinematik bir reklam oluştur",
+      productUrl: "https://magazaniz.com/urunler/...",
+      productTitle: "Ürün adı",
+      storyboardNotFound: "Storyboard sahneleri bulunamadı",
+      yourBrand: "Markanız",
+      yourStore: "Mağazanız",
+      yourProduct: "Ürününüz",
+    },
+    modal: {
+      title: "Plan yükseltmesi gerekiyor",
+      monthlyLimit:
+        "Aylık video limitinize ulaştınız. Devam etmek için daha yüksek bir plan seçin.",
+      durationLimit:
+        "İstenen video süresi mevcut plan limitinizi aşıyor. Devam etmek için planınızı yükseltin.",
+      fallback:
+        "Mevcut planınız bu işlemi kapsamıyor. Devam etmek için daha yüksek bir plan seçin.",
+    },
+  },
+  en: {
+    mode: {
+      images: "Image to Video",
+      text: "Text to Video",
+      product: "URL to Video",
+    },
+    ratio: {
+      square: "Square (1:1)",
+      vertical: "Vertical (9:16)",
+      horizontal: "Horizontal (16:9)",
+    },
+    page: {
+      title: "Create AI Video",
+      subtitle:
+        "Generate cinematic ad videos from text, uploaded images, or product URLs. Your working engines stay untouched — only the experience gets cleaner.",
+      projectSetup: "Project Setup",
+      projectSetupSub:
+        "Configure your brand, source mode, scenes, and generation flow from a single workspace.",
+      preview: "Preview",
+      previewSub: "Final output appears here when rendering is complete.",
+      quickSummary: "Quick Summary",
+      quickSummarySub:
+        "A fast overview of the active project and generation state.",
+      progress: "Progress",
+      ready: "Ready",
+      done: "Done",
+      idle: "Idle",
+      error: "Error",
+      rendering: "Rendering",
+    },
+    fields: {
+      logo: "Logo",
+      images: "Images",
+      aiIdea: "AI Ad Idea",
+      storyboardTitle: "Storyboard Title",
+      hook: "Hook",
+      cta: "CTA",
+      bodyLines: "Body Lines",
+      scenes: "Scenes",
+      sceneTitle: "Scene Title",
+      onScreenText: "On-screen text",
+      duration: "Duration",
+      scenePrompt: "Scene Prompt",
+      imagePrompt: "Image Prompt",
+      productUrl: "Product URL",
+      productTitle: "Product Title",
+      highlights: "Highlights",
+      assets: "Assets",
+      brand: "Brand",
+      slogan: "Slogan",
+      descriptionScript: "Description / Script",
+      format: "Format",
+      projectBrand: "Project Brand",
+      headlineCta: "Headline / CTA",
+      sceneStatus: "Scene Status",
+      currentPlan: "Current plan",
+      remainingCredits: "Remaining credits",
+      maxDuration: "Max duration",
+      usedThisMonth: "Used this month",
+    },
+    hints: {
+      logo: "Upload a square transparent logo for the cleanest brand result.",
+      images: "Upload up to 6 images. Use clean, high-resolution assets.",
+      aiIdea:
+        "This idea powers storyboard generation, scene prompts, images, and final motion clips.",
+      productUrl:
+        "URL scraping can later automate title, images, and highlights.",
+      description:
+        "Keep this short and punchy. It shapes the ad direction.",
+    },
+    buttons: {
+      generateStoryboard: "Generate Storyboard",
+      generatingStoryboard: "Generating Storyboard...",
+      generateSceneVideos: "Generate Scene Videos",
+      generateFinalVideo: "Generate Final Video",
+      rendering: "Rendering...",
+      reset: "Reset",
+      removeLine: "Remove line",
+      addBodyLine: "Add Body Line",
+      removeScene: "Remove scene",
+      addScene: "Add Scene",
+      downloadMp4: "Download MP4",
+      createAnother: "Create another",
+      choosePlan: "Choose a plan",
+      close: "Close",
+    },
+    states: {
+      noPreviewYet: "No preview yet",
+      renderingYourVideo: "Rendering your video...",
+      idleHelp:
+        "Generate storyboard, scene videos, then render the final video.",
+      renderingHelp:
+        "The system is processing scenes and preparing the final output.",
+      errorHelp: "Fix the issue and run the generation again.",
+      sceneVideosGenerated: "Scene videos generated",
+      preparingRequest: "Preparing request...",
+      baseUrlNotReady: "Base URL not ready",
+      renderComplete: "Render complete",
+      renderFailed: "Render failed",
+      logoUploadFailed: "Logo upload failed",
+      imageUploadFailed: "Image upload failed",
+      sceneVideoGenerationFailed: "Scene video generation failed",
+      generatingSceneVideos: "Generating scene videos...",
+      generateSceneVideoXofY: "Generating scene video {current}/{total}...",
+      image: "Image",
+      video: "Video",
+      yes: "Yes",
+      no: "No",
+      assets: "Assets",
+      mode: "Mode",
+      scenes: "Scenes",
+    },
+    placeholders: {
+      aiIdea: "Create a cinematic ad for a coffee shop in Berlin",
+      productUrl: "https://yourstore.com/products/...",
+      productTitle: "Product name",
+      storyboardNotFound: "Storyboard scenes not found",
+      yourBrand: "Your Brand",
+      yourStore: "Your Store",
+      yourProduct: "Your Product",
+    },
+    modal: {
+      title: "Plan upgrade required",
+      monthlyLimit:
+        "You’ve reached your monthly video limit. Please choose a higher plan to continue.",
+      durationLimit:
+        "Your requested video duration exceeds your current plan limit. Please upgrade to continue.",
+      fallback:
+        "Your current plan does not cover this action. Please choose a higher plan to continue.",
+    },
+  },
+  de: {
+    mode: {
+      images: "Bild zu Video",
+      text: "Text zu Video",
+      product: "URL zu Video",
+    },
+    ratio: {
+      square: "Quadrat (1:1)",
+      vertical: "Vertikal (9:16)",
+      horizontal: "Horizontal (16:9)",
+    },
+    page: {
+      title: "KI-Video erstellen",
+      subtitle:
+        "Erstellen Sie kinoreife Werbevideos aus Text, hochgeladenen Bildern oder Produkt-URLs. Ihre bestehende Engine bleibt unverändert — nur die Nutzung wird sauberer.",
+      projectSetup: "Projekteinrichtung",
+      projectSetupSub:
+        "Konfigurieren Sie Marke, Quelltyp, Szenen und Produktionsablauf in einem einzigen Arbeitsbereich.",
+      preview: "Vorschau",
+      previewSub: "Die finale Ausgabe erscheint hier, sobald das Rendering abgeschlossen ist.",
+      quickSummary: "Kurzübersicht",
+      quickSummarySub:
+        "Ein schneller Überblick über das aktive Projekt und den Produktionsstatus.",
+      progress: "Fortschritt",
+      ready: "Bereit",
+      done: "Fertig",
+      idle: "Leerlauf",
+      error: "Fehler",
+      rendering: "Rendering",
+    },
+    fields: {
+      logo: "Logo",
+      images: "Bilder",
+      aiIdea: "KI-Werbeidee",
+      storyboardTitle: "Storyboard-Titel",
+      hook: "Hook",
+      cta: "CTA",
+      bodyLines: "Textzeilen",
+      scenes: "Szenen",
+      sceneTitle: "Szenentitel",
+      onScreenText: "Text im Bild",
+      duration: "Dauer",
+      scenePrompt: "Szenen-Prompt",
+      imagePrompt: "Bild-Prompt",
+      productUrl: "Produkt-URL",
+      productTitle: "Produkttitel",
+      highlights: "Highlights",
+      assets: "Assets",
+      brand: "Marke",
+      slogan: "Slogan",
+      descriptionScript: "Beschreibung / Skript",
+      format: "Format",
+      projectBrand: "Projektmarke",
+      headlineCta: "Headline / CTA",
+      sceneStatus: "Szenenstatus",
+      currentPlan: "Aktueller Plan",
+      remainingCredits: "Verbleibende Credits",
+      maxDuration: "Maximale Dauer",
+      usedThisMonth: "Diesen Monat genutzt",
+    },
+    hints: {
+      logo: "Laden Sie ein quadratisches transparentes Logo für das sauberste Markenergebnis hoch.",
+      images: "Laden Sie bis zu 6 Bilder hoch. Verwenden Sie saubere, hochauflösende Inhalte.",
+      aiIdea:
+        "Diese Idee steuert die Storyboard-Erstellung, Szenen-Prompts, Bilder und die finalen Motion-Clips.",
+      productUrl:
+        "Die URL-Auswertung kann später Titel, Bilder und Highlights automatisch füllen.",
+      description:
+        "Halten Sie es kurz und prägnant. Es bestimmt die Richtung der Anzeige.",
+    },
+    buttons: {
+      generateStoryboard: "Storyboard erstellen",
+      generatingStoryboard: "Storyboard wird erstellt...",
+      generateSceneVideos: "Szenenvideos erzeugen",
+      generateFinalVideo: "Finales Video erzeugen",
+      rendering: "Rendering...",
+      reset: "Zurücksetzen",
+      removeLine: "Zeile entfernen",
+      addBodyLine: "Textzeile hinzufügen",
+      removeScene: "Szene entfernen",
+      addScene: "Szene hinzufügen",
+      downloadMp4: "MP4 herunterladen",
+      createAnother: "Weiteres erstellen",
+      choosePlan: "Plan wählen",
+      close: "Schließen",
+    },
+    states: {
+      noPreviewYet: "Noch keine Vorschau",
+      renderingYourVideo: "Ihr Video wird gerendert...",
+      idleHelp:
+        "Erstellen Sie zuerst Storyboard und Szenenvideos und rendern Sie dann das finale Video.",
+      renderingHelp:
+        "Das System verarbeitet die Szenen und bereitet die finale Ausgabe vor.",
+      errorHelp:
+        "Beheben Sie das Problem und starten Sie die Erstellung erneut.",
+      sceneVideosGenerated: "Szenenvideos wurden erstellt",
+      preparingRequest: "Anfrage wird vorbereitet...",
+      baseUrlNotReady: "Base-URL ist nicht bereit",
+      renderComplete: "Rendering abgeschlossen",
+      renderFailed: "Rendering fehlgeschlagen",
+      logoUploadFailed: "Logo-Upload fehlgeschlagen",
+      imageUploadFailed: "Bild-Upload fehlgeschlagen",
+      sceneVideoGenerationFailed: "Szenenvideo-Erstellung fehlgeschlagen",
+      generatingSceneVideos: "Szenenvideos werden erstellt...",
+      generateSceneVideoXofY: "Szenenvideo wird erstellt {current}/{total}...",
+      image: "Bild",
+      video: "Video",
+      yes: "Ja",
+      no: "Nein",
+      assets: "Assets",
+      mode: "Modus",
+      scenes: "Szenen",
+    },
+    placeholders: {
+      aiIdea: "Erstelle eine kinoreife Werbung für ein Café in Berlin",
+      productUrl: "https://ihrshop.com/produkte/...",
+      productTitle: "Produktname",
+      storyboardNotFound: "Storyboard-Szenen nicht gefunden",
+      yourBrand: "Ihre Marke",
+      yourStore: "Ihr Shop",
+      yourProduct: "Ihr Produkt",
+    },
+    modal: {
+      title: "Plan-Upgrade erforderlich",
+      monthlyLimit:
+        "Sie haben Ihr monatliches Videolimit erreicht. Bitte wählen Sie einen höheren Plan, um fortzufahren.",
+      durationLimit:
+        "Die angeforderte Videodauer überschreitet das Limit Ihres aktuellen Plans. Bitte upgraden Sie, um fortzufahren.",
+      fallback:
+        "Ihr aktueller Plan deckt diese Aktion nicht ab. Bitte wählen Sie einen höheren Plan, um fortzufahren.",
+    },
+  },
+} as const;
+
+function formatTemplate(
+  template: string,
+  vars: Record<string, string | number>
+) {
+  return template.replace(/\{(\w+)\}/g, (_, key) => String(vars[key] ?? ""));
+}
+
 export default function Page() {
+  const [language, setLanguage] = useState<AppLanguage>("en");
   const [mode, setMode] = useState<Mode>("text");
 
   const [brand, setBrand] = useState("Duble-S Technology");
@@ -153,13 +551,39 @@ export default function Page() {
     phase: "",
   });
 
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
+  const [upgradeMessage, setUpgradeMessage] = useState("");
+  const [upgradeDetails, setUpgradeDetails] = useState<{
+    code?: string;
+    planLabel?: string;
+    remainingCredits?: number;
+    maxDurationSec?: number;
+    monthlyVideoLimit?: number | null;
+    usedThisMonth?: number;
+  } | null>(null);
+
   useEffect(() => {
     setBaseUrl(window.location.origin);
+    setLanguage(getInitialLanguage());
   }, []);
+
+  const t = PAGE_TRANSLATIONS[language];
+
+  const MODE_LABEL: Record<Mode, string> = {
+    images: t.mode.images,
+    text: t.mode.text,
+    product: t.mode.product,
+  };
+
+  const RATIO_LABEL: Record<Ratio, string> = {
+    square: t.ratio.square,
+    vertical: t.ratio.vertical,
+    horizontal: t.ratio.horizontal,
+  };
 
   const computed = useMemo(() => {
     if (mode === "text") {
-      const derivedBrand = brand || "Your Brand";
+      const derivedBrand = brand || t.placeholders.yourBrand;
       const derivedSlogan =
         storyboard?.script?.cta ||
         slogan ||
@@ -185,7 +609,7 @@ export default function Page() {
     }
 
     if (mode === "product") {
-      const title = productTitle.trim() || "Your Product";
+      const title = productTitle.trim() || t.placeholders.yourProduct;
       const url = productUrl.trim();
       const highlights = productHighlights
         .split("\n")
@@ -193,7 +617,7 @@ export default function Page() {
         .filter(Boolean)
         .slice(0, 5);
 
-      const derivedBrand = brand || "Your Store";
+      const derivedBrand = brand || t.placeholders.yourStore;
       const derivedSlogan =
         slogan || "Shop now • Fast shipping • Secure checkout";
 
@@ -223,6 +647,9 @@ export default function Page() {
     slogan,
     text,
     storyboard,
+    t.placeholders.yourBrand,
+    t.placeholders.yourStore,
+    t.placeholders.yourProduct,
   ]);
 
   const payload = useMemo(
@@ -276,8 +703,8 @@ export default function Page() {
       setStatus({
         status: "error",
         progress: 0,
-        phase: "Logo upload failed",
-        error: err?.message ?? "Logo upload failed",
+        phase: t.states.logoUploadFailed,
+        error: err?.message ?? t.states.logoUploadFailed,
       });
     }
   }
@@ -293,8 +720,8 @@ export default function Page() {
       setStatus({
         status: "error",
         progress: 0,
-        phase: "Image upload failed",
-        error: err?.message ?? "Image upload failed",
+        phase: t.states.imageUploadFailed,
+        error: err?.message ?? t.states.imageUploadFailed,
       });
     }
   }
@@ -318,7 +745,7 @@ export default function Page() {
           brand,
           ratio,
           durationSec,
-          language: "en",
+          language,
         }),
       });
 
@@ -494,11 +921,14 @@ export default function Page() {
     setStoryboard(null);
     setStoryboardError("");
     setIdea("");
+    setUpgradeModalOpen(false);
+    setUpgradeMessage("");
+    setUpgradeDetails(null);
   }
 
   async function generateSceneVideos() {
     if (!storyboard?.scenes?.length) {
-      alert("Storyboard scenes not found");
+      alert(t.placeholders.storyboardNotFound);
       return;
     }
 
@@ -506,7 +936,7 @@ export default function Page() {
       setStatus({
         status: "rendering",
         progress: 10,
-        phase: "Generating scene videos...",
+        phase: t.states.generatingSceneVideos,
       });
 
       const updatedScenes: StoryboardScene[] = [];
@@ -523,7 +953,10 @@ export default function Page() {
         setStatus({
           status: "rendering",
           progress: clamp(10 + Math.round((index / total) * 80), 10, 90),
-          phase: `Generating scene video ${index + 1}/${total}...`,
+          phase: formatTemplate(t.states.generateSceneVideoXofY, {
+            current: index + 1,
+            total,
+          }),
         });
 
         try {
@@ -564,7 +997,7 @@ export default function Page() {
       setStatus({
         status: "idle",
         progress: 0,
-        phase: "Scene videos generated",
+        phase: t.states.sceneVideosGenerated,
       });
     } catch (error) {
       console.error(error);
@@ -572,8 +1005,8 @@ export default function Page() {
       setStatus({
         status: "error",
         progress: 0,
-        phase: "Scene video generation failed",
-        error: "Scene video generation failed",
+        phase: t.states.sceneVideoGenerationFailed,
+        error: t.states.sceneVideoGenerationFailed,
       });
     }
   }
@@ -583,8 +1016,8 @@ export default function Page() {
       setStatus({
         status: "error",
         progress: 0,
-        phase: "Base URL not ready",
-        error: "baseUrl not ready. Refresh once.",
+        phase: t.states.baseUrlNotReady,
+        error: `${t.states.baseUrlNotReady}. Refresh once.`,
       });
       return;
     }
@@ -592,7 +1025,7 @@ export default function Page() {
     setStatus({
       status: "rendering",
       progress: 5,
-      phase: "Preparing request...",
+      phase: t.states.preparingRequest,
     });
 
     const finalPayload =
@@ -616,7 +1049,35 @@ export default function Page() {
 
       if (!res.ok && !contentType.includes("text/event-stream")) {
         const data = await res.json().catch(() => null);
-        throw new Error(data?.error ?? "Render failed");
+
+        if (res.status === 403 && data?.upgradeRequired) {
+          setUpgradeMessage(
+            data?.code === "PLAN_MONTHLY_LIMIT"
+              ? t.modal.monthlyLimit
+              : t.modal.durationLimit
+          );
+
+          setUpgradeDetails({
+            code: data?.code,
+            planLabel: data?.planLabel,
+            remainingCredits: data?.remainingCredits,
+            maxDurationSec: data?.maxDurationSec,
+            monthlyVideoLimit: data?.monthlyVideoLimit,
+            usedThisMonth: data?.usedThisMonth,
+          });
+
+          setUpgradeModalOpen(true);
+
+          setStatus({
+            status: "idle",
+            progress: 0,
+            phase: "",
+          });
+
+          return;
+        }
+
+        throw new Error(data?.error ?? t.states.renderFailed);
       }
 
       if (contentType.includes("text/event-stream")) {
@@ -631,7 +1092,7 @@ export default function Page() {
                 typeof msg.progress === "number"
                   ? clamp(msg.progress, 0, 100)
                   : 40,
-              phase: msg.phase || "Rendering...",
+              phase: msg.phase || t.page.rendering,
             });
           }
 
@@ -640,7 +1101,7 @@ export default function Page() {
           }
 
           if (msg?.type === "error") {
-            finalError = msg.error || "Render failed";
+            finalError = msg.error || t.states.renderFailed;
           }
         });
 
@@ -655,7 +1116,7 @@ export default function Page() {
         setStatus({
           status: "done",
           progress: 100,
-          phase: "Render complete",
+          phase: t.states.renderComplete,
           url: finalUrl,
         });
         return;
@@ -664,7 +1125,7 @@ export default function Page() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data?.error ?? "Render failed");
+        throw new Error(data?.error ?? t.states.renderFailed);
       }
 
       if (!data?.url) {
@@ -674,15 +1135,15 @@ export default function Page() {
       setStatus({
         status: "done",
         progress: 100,
-        phase: "Render complete",
+        phase: t.states.renderComplete,
         url: data.url,
       });
     } catch (err: any) {
       setStatus({
         status: "error",
         progress: 0,
-        phase: "Render failed",
-        error: err?.message ?? "Render failed",
+        phase: t.states.renderFailed,
+        error: err?.message ?? t.states.renderFailed,
       });
     }
   }
@@ -709,85 +1170,6 @@ export default function Page() {
       display: "grid",
       gridTemplateColumns: "270px 1fr",
       minHeight: "100vh",
-    } as React.CSSProperties,
-
-    sidebar: {
-      borderRight: "1px solid rgba(255,255,255,0.08)",
-      background:
-        "linear-gradient(180deg, rgba(10,18,33,0.98), rgba(8,15,28,0.98))",
-      padding: 20,
-      display: "flex",
-      flexDirection: "column",
-      gap: 22,
-    } as React.CSSProperties,
-
-    brandWrap: {
-      display: "flex",
-      alignItems: "center",
-      gap: 14,
-      paddingBottom: 18,
-      borderBottom: "1px solid rgba(255,255,255,0.08)",
-    } as React.CSSProperties,
-
-    brandLogo: {
-      width: 54,
-      height: 54,
-      borderRadius: 16,
-      overflow: "hidden",
-      flexShrink: 0,
-      background:
-        "linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04))",
-      border: "1px solid rgba(255,255,255,0.1)",
-      display: "grid",
-      placeItems: "center",
-      boxShadow: "0 8px 24px rgba(0,0,0,0.28)",
-    } as React.CSSProperties,
-
-    brandTitle: {
-      fontSize: 20,
-      fontWeight: 900,
-      letterSpacing: -0.3,
-      lineHeight: 1.1,
-      margin: 0,
-    } as React.CSSProperties,
-
-    brandSub: {
-      marginTop: 4,
-      fontSize: 12,
-      color: "rgba(231,238,249,0.62)",
-    } as React.CSSProperties,
-
-    nav: {
-      display: "grid",
-      gap: 8,
-    } as React.CSSProperties,
-
-    navItem: (active: boolean) =>
-      ({
-        padding: "12px 14px",
-        borderRadius: 14,
-        border: active
-          ? "1px solid rgba(59,130,246,0.38)"
-          : "1px solid transparent",
-        background: active
-          ? "linear-gradient(180deg, rgba(59,130,246,0.22), rgba(139,92,246,0.14))"
-          : "transparent",
-        color: active ? "#f5f9ff" : "rgba(231,238,249,0.78)",
-        fontWeight: 700,
-        fontSize: 14,
-        textAlign: "left",
-        cursor: "pointer",
-      }) as React.CSSProperties,
-
-    sidebarFooter: {
-      marginTop: "auto",
-      display: "grid",
-      gap: 10,
-    } as React.CSSProperties,
-
-    sidebarMuted: {
-      fontSize: 12,
-      color: "rgba(231,238,249,0.5)",
     } as React.CSSProperties,
 
     main: {
@@ -928,7 +1310,7 @@ export default function Page() {
       background: "rgba(4,10,20,0.65)",
       color: "#e7eef9",
       outline: "none",
-      resize: "vertical",
+      resize: "vertical" as const,
       minHeight: 110,
     } as React.CSSProperties,
 
@@ -954,7 +1336,7 @@ export default function Page() {
     actions: {
       display: "flex",
       gap: 10,
-      flexWrap: "wrap",
+      flexWrap: "wrap" as const,
       alignItems: "center",
       marginTop: 8,
     } as React.CSSProperties,
@@ -1062,7 +1444,7 @@ export default function Page() {
       border: "1px solid rgba(255,255,255,0.08)",
       borderRadius: 16,
       padding: 12,
-      overflowX: "auto",
+      overflowX: "auto" as const,
       marginTop: 14,
     } as React.CSSProperties,
 
@@ -1093,6 +1475,53 @@ export default function Page() {
       fontWeight: 950,
       marginTop: 4,
     } as React.CSSProperties,
+
+    overlay: {
+      position: "fixed",
+      inset: 0,
+      background: "rgba(2,6,14,0.72)",
+      backdropFilter: "blur(8px)",
+      display: "grid",
+      placeItems: "center",
+      zIndex: 1000,
+      padding: 20,
+    } as React.CSSProperties,
+
+    modal: {
+      width: "100%",
+      maxWidth: 560,
+      borderRadius: 24,
+      background:
+        "linear-gradient(180deg, rgba(11,18,34,0.98), rgba(8,14,27,0.98))",
+      border: "1px solid rgba(255,255,255,0.1)",
+      boxShadow: "0 24px 60px rgba(0,0,0,0.42)",
+      padding: 24,
+    } as React.CSSProperties,
+
+    modalTitle: {
+      margin: 0,
+      fontSize: 24,
+      fontWeight: 950,
+      letterSpacing: -0.4,
+    } as React.CSSProperties,
+
+    modalText: {
+      marginTop: 10,
+      fontSize: 14,
+      lineHeight: 1.6,
+      color: "rgba(231,238,249,0.72)",
+    } as React.CSSProperties,
+
+    modalInfo: {
+      marginTop: 16,
+      padding: 14,
+      borderRadius: 16,
+      background: "rgba(255,255,255,0.04)",
+      border: "1px solid rgba(255,255,255,0.08)",
+      fontSize: 13,
+      color: "#d7e4f7",
+      lineHeight: 1.7,
+    } as React.CSSProperties,
   };
 
   return (
@@ -1103,11 +1532,8 @@ export default function Page() {
         <main style={styles.main}>
           <div style={styles.topbar}>
             <div>
-              <h2 style={styles.topTitle}>Create AI Video</h2>
-              <div style={styles.topSub}>
-                Generate cinematic ad videos from text, uploaded images, or product URLs.
-                Your working engines stay untouched — only the experience gets cleaner.
-              </div>
+              <h2 style={styles.topTitle}>{t.page.title}</h2>
+              <div style={styles.topSub}>{t.page.subtitle}</div>
             </div>
 
             <div style={styles.topBadges}>
@@ -1115,12 +1541,12 @@ export default function Page() {
               <div style={styles.badge}>{RATIO_LABEL[ratio]}</div>
               <div style={styles.badge}>
                 {status.status === "rendering"
-                  ? status.phase || "Rendering"
+                  ? status.phase || t.page.rendering
                   : status.status === "done"
-                    ? "Ready"
+                    ? t.page.ready
                     : status.status === "error"
-                      ? "Error"
-                      : "Idle"}
+                      ? t.page.error
+                      : t.page.idle}
               </div>
             </div>
           </div>
@@ -1140,31 +1566,26 @@ export default function Page() {
           <div style={styles.contentGrid}>
             <section style={styles.card}>
               <div style={styles.cardHeader}>
-                <h3 style={styles.cardTitle}>Project Setup</h3>
-                <div style={styles.cardSub}>
-                  Configure your brand, source mode, scenes, and generation flow from a
-                  single workspace.
-                </div>
+                <h3 style={styles.cardTitle}>{t.page.projectSetup}</h3>
+                <div style={styles.cardSub}>{t.page.projectSetupSub}</div>
               </div>
 
               <div style={styles.cardBody}>
                 {mode === "images" && (
                   <>
                     <div style={styles.field}>
-                      <div style={styles.label}>Logo</div>
+                      <div style={styles.label}>{t.fields.logo}</div>
                       <input
                         type="file"
                         accept="image/*"
                         onChange={onPickLogo}
                         style={styles.input}
                       />
-                      <div style={styles.hint}>
-                        Upload a square transparent logo for the cleanest brand result.
-                      </div>
+                      <div style={styles.hint}>{t.hints.logo}</div>
                     </div>
 
                     <div style={styles.field}>
-                      <div style={styles.label}>Images</div>
+                      <div style={styles.label}>{t.fields.images}</div>
                       <input
                         type="file"
                         accept="image/*"
@@ -1172,9 +1593,7 @@ export default function Page() {
                         onChange={onPickImages}
                         style={styles.input}
                       />
-                      <div style={styles.hint}>
-                        Upload up to 6 images. Use clean, high-resolution assets.
-                      </div>
+                      <div style={styles.hint}>{t.hints.images}</div>
 
                       {imageUrls.length > 0 && (
                         <div style={styles.thumbGrid}>
@@ -1200,17 +1619,14 @@ export default function Page() {
                 {mode === "text" && (
                   <>
                     <div style={styles.field}>
-                      <div style={styles.label}>AI Ad Idea</div>
+                      <div style={styles.label}>{t.fields.aiIdea}</div>
                       <textarea
                         value={idea}
                         onChange={(e) => setIdea(e.target.value)}
                         style={{ ...styles.textarea, minHeight: 130 }}
-                        placeholder="Create a cinematic ad for a coffee shop in Berlin"
+                        placeholder={t.placeholders.aiIdea}
                       />
-                      <div style={styles.hint}>
-                        This idea powers storyboard generation, scene prompts, images, and
-                        final motion clips.
-                      </div>
+                      <div style={styles.hint}>{t.hints.aiIdea}</div>
                     </div>
 
                     <div style={styles.actions}>
@@ -1219,7 +1635,9 @@ export default function Page() {
                         disabled={storyboardLoading || !idea.trim()}
                         style={styles.primaryBtn(storyboardLoading || !idea.trim())}
                       >
-                        {storyboardLoading ? "Generating Storyboard..." : "Generate Storyboard"}
+                        {storyboardLoading
+                          ? t.buttons.generatingStoryboard
+                          : t.buttons.generateStoryboard}
                       </button>
 
                       <button
@@ -1231,7 +1649,7 @@ export default function Page() {
                         }
                         style={styles.secondaryBtn}
                       >
-                        Generate Scene Videos
+                        {t.buttons.generateSceneVideos}
                       </button>
                     </div>
 
@@ -1244,7 +1662,7 @@ export default function Page() {
                     {storyboard && (
                       <div style={styles.storyboardCard}>
                         <div style={styles.field}>
-                          <div style={styles.label}>Storyboard Title</div>
+                          <div style={styles.label}>{t.fields.storyboardTitle}</div>
                           <input
                             value={storyboard.title}
                             onChange={(e) => updateStoryboardTitle(e.target.value)}
@@ -1258,7 +1676,7 @@ export default function Page() {
                         </div>
 
                         <div style={styles.field}>
-                          <div style={styles.label}>Hook</div>
+                          <div style={styles.label}>{t.fields.hook}</div>
                           <textarea
                             value={storyboard?.script?.hook ?? ""}
                             onChange={(e) => updateStoryboardHook(e.target.value)}
@@ -1267,7 +1685,7 @@ export default function Page() {
                         </div>
 
                         <div style={styles.field}>
-                          <div style={styles.label}>CTA</div>
+                          <div style={styles.label}>{t.fields.cta}</div>
                           <input
                             value={storyboard?.script?.cta ?? ""}
                             onChange={(e) => updateStoryboardCta(e.target.value)}
@@ -1275,7 +1693,9 @@ export default function Page() {
                           />
                         </div>
 
-                        <div style={{ fontWeight: 900, marginBottom: 8 }}>Body Lines</div>
+                        <div style={{ fontWeight: 900, marginBottom: 8 }}>
+                          {t.fields.bodyLines}
+                        </div>
                         {storyboard?.script?.body?.map((line, index) => (
                           <div key={index} style={{ ...styles.row, marginBottom: 8 }}>
                             <input
@@ -1287,20 +1707,22 @@ export default function Page() {
                               style={styles.dangerBtn}
                               onClick={() => removeStoryboardBodyLine(index)}
                             >
-                              Remove line
+                              {t.buttons.removeLine}
                             </button>
                           </div>
                         ))}
 
                         <div style={styles.actions}>
                           <button style={styles.secondaryBtn} onClick={addStoryboardBodyLine}>
-                            Add Body Line
+                            {t.buttons.addBodyLine}
                           </button>
                         </div>
 
                         <div style={styles.divider} />
 
-                        <div style={{ fontWeight: 900, marginBottom: 8 }}>Scenes</div>
+                        <div style={{ fontWeight: 900, marginBottom: 8 }}>
+                          {t.fields.scenes}
+                        </div>
 
                         {storyboard.scenes.map((scene, index) => (
                           <div
@@ -1316,17 +1738,19 @@ export default function Page() {
                                 marginBottom: 10,
                               }}
                             >
-                              <div style={{ fontWeight: 900 }}>Scene {index + 1}</div>
+                              <div style={{ fontWeight: 900 }}>
+                                {t.fields.scenes} {index + 1}
+                              </div>
                               <button
                                 style={styles.dangerBtn}
                                 onClick={() => removeStoryboardScene(index)}
                               >
-                                Remove scene
+                                {t.buttons.removeScene}
                               </button>
                             </div>
 
                             <div style={styles.field}>
-                              <div style={styles.label}>Scene Title</div>
+                              <div style={styles.label}>{t.fields.sceneTitle}</div>
                               <input
                                 value={scene.title}
                                 onChange={(e) =>
@@ -1338,7 +1762,7 @@ export default function Page() {
 
                             <div style={styles.row}>
                               <div style={styles.field}>
-                                <div style={styles.label}>On-screen text</div>
+                                <div style={styles.label}>{t.fields.onScreenText}</div>
                                 <input
                                   value={scene.onScreenText ?? ""}
                                   onChange={(e) =>
@@ -1349,7 +1773,7 @@ export default function Page() {
                               </div>
 
                               <div style={styles.field}>
-                                <div style={styles.label}>Duration</div>
+                                <div style={styles.label}>{t.fields.duration}</div>
                                 <input
                                   type="number"
                                   min={2}
@@ -1368,7 +1792,7 @@ export default function Page() {
                             </div>
 
                             <div style={styles.field}>
-                              <div style={styles.label}>Scene Prompt</div>
+                              <div style={styles.label}>{t.fields.scenePrompt}</div>
                               <textarea
                                 value={scene.prompt}
                                 onChange={(e) =>
@@ -1379,7 +1803,7 @@ export default function Page() {
                             </div>
 
                             <div style={styles.field}>
-                              <div style={styles.label}>Image Prompt</div>
+                              <div style={styles.label}>{t.fields.imagePrompt}</div>
                               <textarea
                                 value={scene.imagePrompt ?? ""}
                                 onChange={(e) =>
@@ -1390,8 +1814,8 @@ export default function Page() {
                             </div>
 
                             <div style={styles.small}>
-                              Image: {scene.imageUrl ? "Yes" : "No"} — Video:{" "}
-                              {scene.videoUrl ? "Yes" : "No"}
+                              {t.states.image}: {scene.imageUrl ? t.states.yes : t.states.no} —{" "}
+                              {t.states.video}: {scene.videoUrl ? t.states.yes : t.states.no}
                             </div>
                           </div>
                         ))}
@@ -1402,7 +1826,7 @@ export default function Page() {
                             onClick={addStoryboardScene}
                             disabled={storyboard.scenes.length >= 7}
                           >
-                            Add Scene
+                            {t.buttons.addScene}
                           </button>
                         </div>
                       </div>
@@ -1413,30 +1837,28 @@ export default function Page() {
                 {mode === "product" && (
                   <>
                     <div style={styles.field}>
-                      <div style={styles.label}>Product URL</div>
+                      <div style={styles.label}>{t.fields.productUrl}</div>
                       <input
                         value={productUrl}
                         onChange={(e) => setProductUrl(e.target.value)}
                         style={styles.input}
-                        placeholder="https://yourstore.com/products/..."
+                        placeholder={t.placeholders.productUrl}
                       />
-                      <div style={styles.hint}>
-                        URL scraping can later automate title, images, and highlights.
-                      </div>
+                      <div style={styles.hint}>{t.hints.productUrl}</div>
                     </div>
 
                     <div style={styles.row}>
                       <div style={styles.field}>
-                        <div style={styles.label}>Product Title</div>
+                        <div style={styles.label}>{t.fields.productTitle}</div>
                         <input
                           value={productTitle}
                           onChange={(e) => setProductTitle(e.target.value)}
                           style={styles.input}
-                          placeholder="Product name"
+                          placeholder={t.placeholders.productTitle}
                         />
                       </div>
                       <div style={styles.field}>
-                        <div style={styles.label}>Duration</div>
+                        <div style={styles.label}>{t.fields.duration}</div>
                         <input
                           type="number"
                           min={10}
@@ -1449,7 +1871,7 @@ export default function Page() {
                     </div>
 
                     <div style={styles.field}>
-                      <div style={styles.label}>Highlights</div>
+                      <div style={styles.label}>{t.fields.highlights}</div>
                       <textarea
                         value={productHighlights}
                         onChange={(e) => setProductHighlights(e.target.value)}
@@ -1460,11 +1882,11 @@ export default function Page() {
                     <div style={styles.divider} />
 
                     <div style={styles.field}>
-                      <div style={styles.label}>Assets</div>
+                      <div style={styles.label}>{t.fields.assets}</div>
 
                       <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
                         <label style={{ display: "grid", gap: 6, flex: "1 1 220px" }}>
-                          <span style={styles.label}>Logo</span>
+                          <span style={styles.label}>{t.fields.logo}</span>
                           <input
                             type="file"
                             accept="image/*"
@@ -1474,7 +1896,7 @@ export default function Page() {
                         </label>
 
                         <label style={{ display: "grid", gap: 6, flex: "1 1 220px" }}>
-                          <span style={styles.label}>Images</span>
+                          <span style={styles.label}>{t.fields.images}</span>
                           <input
                             type="file"
                             accept="image/*"
@@ -1492,7 +1914,7 @@ export default function Page() {
 
                 <div style={styles.row}>
                   <div style={styles.field}>
-                    <div style={styles.label}>Brand</div>
+                    <div style={styles.label}>{t.fields.brand}</div>
                     <input
                       value={brand}
                       onChange={(e) => setBrand(e.target.value)}
@@ -1501,7 +1923,7 @@ export default function Page() {
                   </div>
 
                   <div style={styles.field}>
-                    <div style={styles.label}>Slogan</div>
+                    <div style={styles.label}>{t.fields.slogan}</div>
                     <input
                       value={slogan}
                       onChange={(e) => setSlogan(e.target.value)}
@@ -1511,20 +1933,18 @@ export default function Page() {
                 </div>
 
                 <div style={styles.field}>
-                  <div style={styles.label}>Description / Script</div>
+                  <div style={styles.label}>{t.fields.descriptionScript}</div>
                   <textarea
                     value={mode === "images" ? text : computed.text}
                     onChange={(e) => setText(e.target.value)}
                     style={styles.textarea}
                   />
-                  <div style={styles.hint}>
-                    Keep this short and punchy. It shapes the ad direction.
-                  </div>
+                  <div style={styles.hint}>{t.hints.description}</div>
                 </div>
 
                 <div style={styles.row}>
                   <div style={styles.field}>
-                    <div style={styles.label}>Format</div>
+                    <div style={styles.label}>{t.fields.format}</div>
                     <select
                       value={ratio}
                       onChange={(e) => setRatio(e.target.value as Ratio)}
@@ -1537,7 +1957,7 @@ export default function Page() {
                   </div>
 
                   <div style={styles.field}>
-                    <div style={styles.label}>Duration</div>
+                    <div style={styles.label}>{t.fields.duration}</div>
                     <input
                       type="number"
                       min={10}
@@ -1555,7 +1975,9 @@ export default function Page() {
                     disabled={!canRender || status.status === "rendering"}
                     style={styles.primaryBtn(!canRender || status.status === "rendering")}
                   >
-                    {status.status === "rendering" ? "Rendering..." : "Generate Final Video"}
+                    {status.status === "rendering"
+                      ? t.buttons.rendering
+                      : t.buttons.generateFinalVideo}
                   </button>
 
                   {mode === "text" && (
@@ -1566,12 +1988,12 @@ export default function Page() {
                       }
                       style={styles.secondaryBtn}
                     >
-                      Generate Scene Videos
+                      {t.buttons.generateSceneVideos}
                     </button>
                   )}
 
                   <button onClick={resetAll} style={styles.secondaryBtn}>
-                    Reset
+                    {t.buttons.reset}
                   </button>
                 </div>
 
@@ -1582,21 +2004,19 @@ export default function Page() {
             <section style={{ display: "grid", gap: 18 }}>
               <div style={styles.card}>
                 <div style={styles.cardHeader}>
-                  <h3 style={styles.cardTitle}>Preview</h3>
-                  <div style={styles.cardSub}>
-                    Final output appears here when rendering is complete.
-                  </div>
+                  <h3 style={styles.cardTitle}>{t.page.preview}</h3>
+                  <div style={styles.cardSub}>{t.page.previewSub}</div>
                 </div>
 
                 <div style={styles.cardBody}>
                   <div style={styles.statsGrid}>
                     <div style={styles.statCard}>
-                      <div style={styles.small}>Mode</div>
+                      <div style={styles.small}>{t.states.mode}</div>
                       <div style={styles.statValue}>{MODE_LABEL[mode]}</div>
                     </div>
 
                     <div style={styles.statCard}>
-                      <div style={styles.small}>Scenes</div>
+                      <div style={styles.small}>{t.states.scenes}</div>
                       <div style={styles.statValue}>{storyboard?.scenes?.length ?? 0}</div>
                     </div>
                   </div>
@@ -1609,13 +2029,13 @@ export default function Page() {
                         marginBottom: 8,
                       }}
                     >
-                      <div style={{ fontWeight: 900 }}>Progress</div>
+                      <div style={{ fontWeight: 900 }}>{t.page.progress}</div>
                       <div style={styles.small}>
-                        {status.status === "idle" && "Ready"}
+                        {status.status === "idle" && t.page.ready}
                         {status.status === "rendering" &&
-                          (status.phase ? status.phase : "Rendering...")}
-                        {status.status === "done" && "Done"}
-                        {status.status === "error" && "Error"}
+                          (status.phase ? status.phase : t.page.rendering)}
+                        {status.status === "done" && t.page.done}
+                        {status.status === "error" && t.page.error}
                       </div>
                     </div>
 
@@ -1640,22 +2060,23 @@ export default function Page() {
                       }}
                     >
                       <div style={{ fontWeight: 950, fontSize: 16, marginBottom: 6 }}>
-                        {status.status === "rendering" ? "Rendering your video..." : "No preview yet"}
+                        {status.status === "rendering"
+                          ? t.states.renderingYourVideo
+                          : t.states.noPreviewYet}
                       </div>
 
                       <div style={styles.small}>
-                        {status.status === "idle" &&
-                          "Generate storyboard, scene videos, then render the final video."}
-                        {status.status === "rendering" &&
-                          "The system is processing scenes and preparing the final output."}
-                        {status.status === "error" &&
-                          "Fix the issue and run the generation again."}
+                        {status.status === "idle" && t.states.idleHelp}
+                        {status.status === "rendering" && t.states.renderingHelp}
+                        {status.status === "error" && t.states.errorHelp}
                       </div>
 
                       {(logoUrl || imageUrls.length > 0) && (
                         <>
                           <div style={styles.divider} />
-                          <div style={{ fontWeight: 900, marginBottom: 8 }}>Assets</div>
+                          <div style={{ fontWeight: 900, marginBottom: 8 }}>
+                            {t.states.assets}
+                          </div>
 
                           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                             {logoUrl && (
@@ -1712,7 +2133,7 @@ export default function Page() {
 
                       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
                         <a style={styles.linkBtn} href={status.url} download>
-                          Download MP4
+                          {t.buttons.downloadMp4}
                         </a>
 
                         <button
@@ -1725,7 +2146,7 @@ export default function Page() {
                             })
                           }
                         >
-                          Create another
+                          {t.buttons.createAnother}
                         </button>
                       </div>
                     </>
@@ -1735,32 +2156,30 @@ export default function Page() {
 
               <div style={styles.card}>
                 <div style={styles.cardHeader}>
-                  <h3 style={styles.cardTitle}>Quick Summary</h3>
-                  <div style={styles.cardSub}>
-                    A fast overview of the active project and generation state.
-                  </div>
+                  <h3 style={styles.cardTitle}>{t.page.quickSummary}</h3>
+                  <div style={styles.cardSub}>{t.page.quickSummarySub}</div>
                 </div>
 
                 <div style={styles.cardBody}>
                   <div style={styles.field}>
-                    <div style={styles.label}>Project Brand</div>
+                    <div style={styles.label}>{t.fields.projectBrand}</div>
                     <input value={computed.brand} readOnly style={styles.input} />
                   </div>
 
                   <div style={styles.field}>
-                    <div style={styles.label}>Headline / CTA</div>
+                    <div style={styles.label}>{t.fields.headlineCta}</div>
                     <input value={computed.slogan} readOnly style={styles.input} />
                   </div>
 
                   {storyboard && (
                     <>
                       <div style={styles.field}>
-                        <div style={styles.label}>Storyboard Title</div>
+                        <div style={styles.label}>{t.fields.storyboardTitle}</div>
                         <input value={storyboard.title} readOnly style={styles.input} />
                       </div>
 
                       <div style={styles.field}>
-                        <div style={styles.label}>Scene Status</div>
+                        <div style={styles.label}>{t.fields.sceneStatus}</div>
                         <div style={{ ...styles.storyboardCard, marginTop: 0 }}>
                           {storyboard.scenes.map((scene, index) => (
                             <div
@@ -1777,11 +2196,11 @@ export default function Page() {
                               }}
                             >
                               <div style={{ fontWeight: 700 }}>
-                                Scene {index + 1}
+                                {t.fields.scenes} {index + 1}
                               </div>
                               <div style={styles.small}>
-                                Image: {scene.imageUrl ? "Yes" : "No"} / Video:{" "}
-                                {scene.videoUrl ? "Yes" : "No"}
+                                {t.states.image}: {scene.imageUrl ? t.states.yes : t.states.no} /{" "}
+                                {t.states.video}: {scene.videoUrl ? t.states.yes : t.states.no}
                               </div>
                             </div>
                           ))}
@@ -1795,6 +2214,62 @@ export default function Page() {
           </div>
         </main>
       </div>
+
+      {upgradeModalOpen && (
+        <div style={styles.overlay}>
+          <div style={styles.modal}>
+            <h3 style={styles.modalTitle}>{t.modal.title}</h3>
+
+            <div style={styles.modalText}>
+              {upgradeMessage || t.modal.fallback}
+            </div>
+
+            <div style={styles.modalInfo}>
+              <div>
+                <b>{t.fields.currentPlan}:</b> {upgradeDetails?.planLabel ?? "-"}
+              </div>
+              <div>
+                <b>{t.fields.remainingCredits}:</b>{" "}
+                {typeof upgradeDetails?.remainingCredits === "number"
+                  ? upgradeDetails.remainingCredits
+                  : "-"}
+              </div>
+              <div>
+                <b>{t.fields.maxDuration}:</b>{" "}
+                {typeof upgradeDetails?.maxDurationSec === "number"
+                  ? `${upgradeDetails.maxDurationSec}s`
+                  : "-"}
+              </div>
+              <div>
+                <b>{t.fields.usedThisMonth}:</b>{" "}
+                {typeof upgradeDetails?.usedThisMonth === "number"
+                  ? upgradeDetails.usedThisMonth
+                  : "-"}
+              </div>
+            </div>
+
+            <div style={{ ...styles.actions, marginTop: 18 }}>
+              <button
+                style={styles.primaryBtn(false)}
+                onClick={() => {
+                  window.location.href = "/billing";
+                }}
+              >
+                {t.buttons.choosePlan}
+              </button>
+
+              <button
+                style={styles.secondaryBtn}
+                onClick={() => {
+                  setUpgradeModalOpen(false);
+                }}
+              >
+                {t.buttons.close}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

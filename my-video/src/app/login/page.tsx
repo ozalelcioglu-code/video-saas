@@ -3,13 +3,80 @@
 import { useEffect, useState } from "react";
 import { authClient } from "../../lib/auth-client";
 
+type Lang = "tr" | "en" | "de";
+
+function getLanguage(): Lang {
+  const match = document.cookie.match(/app-language=(tr|en|de)/);
+  if (match) return match[1] as Lang;
+
+  const browser = navigator.language;
+
+  if (browser.startsWith("tr")) return "tr";
+  if (browser.startsWith("de")) return "de";
+
+  return "en";
+}
+
+const TEXT = {
+  tr: {
+    subtitle: "AI video çalışma alanınızı yönetmek için giriş yapın.",
+    login: "Giriş Yap",
+    signup: "Kayıt Ol",
+    fullName: "Ad Soyad",
+    email: "Email",
+    password: "Şifre",
+    createAccount: "Hesap Oluştur",
+    pleaseWait: "Lütfen bekleyin...",
+    signupFailed: "Kayıt başarısız",
+    loginFailed: "Giriş başarısız",
+    authFailed: "Kimlik doğrulama başarısız",
+  },
+
+  en: {
+    subtitle: "Sign in to manage your AI video workspace.",
+    login: "Login",
+    signup: "Sign Up",
+    fullName: "Full Name",
+    email: "Email",
+    password: "Password",
+    createAccount: "Create account",
+    pleaseWait: "Please wait...",
+    signupFailed: "Signup failed",
+    loginFailed: "Login failed",
+    authFailed: "Auth failed",
+  },
+
+  de: {
+    subtitle: "Melden Sie sich an, um Ihren KI-Video-Arbeitsbereich zu verwalten.",
+    login: "Anmelden",
+    signup: "Registrieren",
+    fullName: "Vollständiger Name",
+    email: "Email",
+    password: "Passwort",
+    createAccount: "Konto erstellen",
+    pleaseWait: "Bitte warten...",
+    signupFailed: "Registrierung fehlgeschlagen",
+    loginFailed: "Anmeldung fehlgeschlagen",
+    authFailed: "Authentifizierung fehlgeschlagen",
+  },
+};
+
 export default function LoginPage() {
+  const [lang, setLang] = useState<Lang>("en");
+
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
+
+  useEffect(() => {
+    setLang(getLanguage());
+  }, []);
+
+  const t = TEXT[lang];
 
   useEffect(() => {
     const check = async () => {
@@ -38,6 +105,7 @@ export default function LoginPage() {
         "Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial",
       padding: 24,
     } as React.CSSProperties,
+
     card: {
       width: "100%",
       maxWidth: 460,
@@ -47,12 +115,14 @@ export default function LoginPage() {
       padding: 24,
       boxShadow: "0 16px 40px rgba(0,0,0,0.28)",
     } as React.CSSProperties,
+
     logoWrap: {
       display: "flex",
       alignItems: "center",
       gap: 14,
       marginBottom: 22,
     } as React.CSSProperties,
+
     logo: {
       width: 58,
       height: 58,
@@ -60,21 +130,25 @@ export default function LoginPage() {
       overflow: "hidden",
       border: "1px solid rgba(255,255,255,0.08)",
     } as React.CSSProperties,
+
     title: {
       fontSize: 28,
       fontWeight: 900,
       margin: 0,
     } as React.CSSProperties,
+
     sub: {
       marginTop: 6,
       color: "rgba(231,238,249,0.65)",
       fontSize: 14,
     } as React.CSSProperties,
+
     tabs: {
       display: "flex",
       gap: 10,
       marginBottom: 18,
     } as React.CSSProperties,
+
     tab: (active: boolean) =>
       ({
         flex: 1,
@@ -90,17 +164,20 @@ export default function LoginPage() {
         cursor: "pointer",
         fontWeight: 800,
       }) as React.CSSProperties,
+
     field: {
       display: "grid",
       gap: 8,
       marginBottom: 14,
     } as React.CSSProperties,
+
     label: {
       fontSize: 12,
       fontWeight: 800,
       color: "rgba(231,238,249,0.75)",
       textTransform: "uppercase",
     } as React.CSSProperties,
+
     input: {
       width: "100%",
       padding: "12px 14px",
@@ -110,6 +187,7 @@ export default function LoginPage() {
       color: "#e7eef9",
       outline: "none",
     } as React.CSSProperties,
+
     button: {
       width: "100%",
       padding: "12px 16px",
@@ -122,6 +200,7 @@ export default function LoginPage() {
       fontWeight: 900,
       marginTop: 8,
     } as React.CSSProperties,
+
     msg: {
       marginTop: 12,
       fontSize: 13,
@@ -143,7 +222,7 @@ export default function LoginPage() {
         });
 
         if (result.error) {
-          setMsg(result.error.message || "Signup failed");
+          setMsg(result.error.message || t.signupFailed);
         } else {
           window.location.href = "/";
         }
@@ -154,13 +233,13 @@ export default function LoginPage() {
         });
 
         if (result.error) {
-          setMsg(result.error.message || "Login failed");
+          setMsg(result.error.message || t.loginFailed);
         } else {
           window.location.href = "/";
         }
       }
     } catch (err: any) {
-      setMsg(err?.message || "Auth failed");
+      setMsg(err?.message || t.authFailed);
     } finally {
       setLoading(false);
     }
@@ -177,24 +256,26 @@ export default function LoginPage() {
               style={{ width: "100%", height: "100%", objectFit: "cover" }}
             />
           </div>
+
           <div>
             <h1 style={styles.title}>Duble-S Motion AI</h1>
-            <div style={styles.sub}>Sign in to manage your AI video workspace.</div>
+            <div style={styles.sub}>{t.subtitle}</div>
           </div>
         </div>
 
         <div style={styles.tabs}>
           <button style={styles.tab(mode === "login")} onClick={() => setMode("login")}>
-            Login
+            {t.login}
           </button>
+
           <button style={styles.tab(mode === "signup")} onClick={() => setMode("signup")}>
-            Sign Up
+            {t.signup}
           </button>
         </div>
 
         {mode === "signup" && (
           <div style={styles.field}>
-            <div style={styles.label}>Full Name</div>
+            <div style={styles.label}>{t.fullName}</div>
             <input
               style={styles.input}
               value={name}
@@ -204,7 +285,7 @@ export default function LoginPage() {
         )}
 
         <div style={styles.field}>
-          <div style={styles.label}>Email</div>
+          <div style={styles.label}>{t.email}</div>
           <input
             style={styles.input}
             value={email}
@@ -213,7 +294,7 @@ export default function LoginPage() {
         </div>
 
         <div style={styles.field}>
-          <div style={styles.label}>Password</div>
+          <div style={styles.label}>{t.password}</div>
           <input
             type="password"
             style={styles.input}
@@ -223,7 +304,11 @@ export default function LoginPage() {
         </div>
 
         <button style={styles.button} onClick={onSubmit} disabled={loading}>
-          {loading ? "Please wait..." : mode === "login" ? "Login" : "Create account"}
+          {loading
+            ? t.pleaseWait
+            : mode === "login"
+            ? t.login
+            : t.createAccount}
         </button>
 
         {msg ? <div style={styles.msg}>{msg}</div> : null}
