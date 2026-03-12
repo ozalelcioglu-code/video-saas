@@ -104,9 +104,7 @@ export async function setSubscriptionForUser(input: {
   const sql = getSql();
 
   const resolvedPlan =
-    input.plan ??
-    resolvePlanFromPriceId(input.stripePriceId ?? null) ??
-    "free";
+    input.plan ?? resolvePlanFromPriceId(input.stripePriceId ?? null) ?? "free";
 
   const rows: any[] = await sql`
     update user_profiles
@@ -133,9 +131,7 @@ export async function setSubscriptionByCustomerId(input: {
   const sql = getSql();
 
   const resolvedPlan =
-    input.plan ??
-    resolvePlanFromPriceId(input.stripePriceId ?? null) ??
-    "free";
+    input.plan ?? resolvePlanFromPriceId(input.stripePriceId ?? null) ?? "free";
 
   const rows: any[] = await sql`
     update user_profiles
@@ -221,4 +217,37 @@ export async function getResolvedUserPlan(userId: string) {
     maxDurationSec: rules.maxDurationSec,
     monthlyVideoLimit: rules.monthlyVideoLimit,
   };
+}
+
+/* ---------------------------------------
+   Backward-compatible exports
+---------------------------------------- */
+
+export const getUserProfile = getUserProfileByUserId;
+
+export async function updateUserStripeCustomerId(input: {
+  userId: string;
+  stripeCustomerId: string;
+}) {
+  return setStripeCustomerForUser(input);
+}
+
+export async function updateUserSubscription(input: {
+  userId: string;
+  stripeSubscriptionId?: string | null;
+  stripePriceId?: string | null;
+  stripeCurrentPeriodEnd?: string | null;
+  plan?: PlanName | null;
+}) {
+  return setSubscriptionForUser(input);
+}
+
+export async function updateUserSubscriptionByCustomerId(input: {
+  stripeCustomerId: string;
+  stripeSubscriptionId?: string | null;
+  stripePriceId?: string | null;
+  stripeCurrentPeriodEnd?: string | null;
+  plan?: PlanName | null;
+}) {
+  return setSubscriptionByCustomerId(input);
 }
