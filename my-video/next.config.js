@@ -1,20 +1,3 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  turbopack: {
-    enabled: false,
-  },
-
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-
-  outputFileTracingIncludes: {
-    "/api/render": ["./remotion-bundle/**/*"],
-  },
-};
+const nextConfig = {};
 
 export default nextConfig;

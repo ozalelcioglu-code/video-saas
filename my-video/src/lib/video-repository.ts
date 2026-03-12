@@ -1,4 +1,4 @@
-import { sql } from "./db";
+import { getSql } from "./db";
 
 export type CreateVideoInput = {
   userId: string;
@@ -15,7 +15,9 @@ export type CreateVideoInput = {
 };
 
 export async function createVideoRecord(input: CreateVideoInput) {
-  const inserted = await sql`
+  const sql = getSql();
+
+  const inserted: any[] = await sql`
     insert into videos (
       user_id,
       project_id,
@@ -45,11 +47,13 @@ export async function createVideoRecord(input: CreateVideoInput) {
     returning *
   `;
 
-  return inserted[0];
+  return inserted[0] ?? null;
 }
 
 export async function listVideosByUserId(userId: string) {
-  return sql`
+  const sql = getSql();
+
+  const rows: any[] = await sql`
     select
       id,
       user_id,
@@ -69,13 +73,17 @@ export async function listVideosByUserId(userId: string) {
     order by created_at desc
     limit 100
   `;
+
+  return rows;
 }
 
 export async function deleteVideoById(input: {
   videoId: string;
   userId: string;
 }) {
-  const deleted = await sql`
+  const sql = getSql();
+
+  const deleted: any[] = await sql`
     delete from videos
     where id = ${input.videoId}::uuid
       and user_id = ${input.userId}::text
