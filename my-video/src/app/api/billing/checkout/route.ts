@@ -81,7 +81,10 @@ export async function POST(req: Request) {
       });
 
       customerId = customer.id;
-      await updateUserStripeCustomerId(userId, customer.id);
+      await updateUserStripeCustomerId({
+  userId,
+  stripeCustomerId: customer.id,
+});
     }
 
     const appUrl =
