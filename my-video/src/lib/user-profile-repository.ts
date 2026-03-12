@@ -1,15 +1,33 @@
-import { sql } from "./db";
+import { getSql } from "./db";
 import { getRemainingCredits, PLAN_RULES, type PlanName } from "./plans";
 
 type StripeManagedPlan = "starter" | "pro" | "agency";
 
-function getPlanLimits(plan: PlanName) {
-  const rule = PLAN_RULES[plan];
+type UserProfileRow = {
+  id: string;
+  user_id: string;
+  email: string;
+  full_name: string | null;
+  plan: PlanName | null;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  stripe_price_id: string | null;
+  stripe_current_period_end: string | null;
+  monthly_video_count: number | null;
+  monthly_video_reset_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
 
-  return {
-    monthlyVideoLimit: rule.monthlyVideoLimit,
-    maxDurationSec: rule.maxDurationSec,
-  };
+const PRICE_ID_TO_PLAN: Record<string, StripeManagedPlan> = {
+  [process.env.STRIPE_PRICE_STARTER || ""]: "starter",
+  [process.env.STRIPE_PRICE_PRO || ""]: "pro",
+  [process.env.STRIPE_PRICE_AGENCY || ""]: "agency",
+};
+
+function resolvePlanFromPriceId(priceId?: string | null): PlanName {
+  if (!priceId) return "free";
+  return PRICE_ID_TO_PLAN[priceId] || "free";
 }
 
 export async function ensureUserProfile(input: {
@@ -17,253 +35,190 @@ export async function ensureUserProfile(input: {
   email: string;
   fullName?: string | null;
 }) {
-  const rows = await sql`
+  const sql = getSql();
+
+  const rows: any[] = await sql`
     insert into user_profiles (
       user_id,
       email,
       full_name,
       plan,
-      monthly_video_limit,
-      max_video_seconds,
-      updated_at
+      monthly_video_count
     )
     values (
       ${input.userId}::text,
       ${input.email},
       ${input.fullName ?? null},
       'free',
-      ${PLAN_RULES.free.monthlyVideoLimit},
-      ${PLAN_RULES.free.maxDurationSec},
-      now()
+      0
     )
     on conflict (user_id)
     do update set
       email = excluded.email,
-      full_name = excluded.full_name,
+      full_name = coalesce(excluded.full_name, user_profiles.full_name),
       updated_at = now()
     returning *
   `;
 
-  return rows[0] ?? null;
+  return (rows[0] ?? null) as UserProfileRow | null;
 }
 
-export async function getUserProfile(userId: string) {
-  const rows = await sql`
+export async function getUserProfileByUserId(userId: string) {
+  const sql = getSql();
+
+  const rows: any[] = await sql`
     select *
     from user_profiles
     where user_id = ${userId}::text
     limit 1
   `;
 
-  return rows[0] ?? null;
+  return (rows[0] ?? null) as UserProfileRow | null;
 }
 
-export async function getUserProfileByStripeCustomerId(stripeCustomerId: string) {
-  const rows = await sql`
-    select *
-    from user_profiles
-    where stripe_customer_id = ${stripeCustomerId}::text
-    limit 1
+export async function setStripeCustomerForUser(input: {
+  userId: string;
+  stripeCustomerId: string;
+}) {
+  const sql = getSql();
+
+  const rows: any[] = await sql`
+    update user_profiles
+    set
+      stripe_customer_id = ${input.stripeCustomerId},
+      updated_at = now()
+    where user_id = ${input.userId}::text
+    returning *
   `;
 
-  return rows[0] ?? null;
+  return (rows[0] ?? null) as UserProfileRow | null;
 }
 
-export async function getMonthlyVideoUsage(userId: string) {
-  const rows = await sql`
-    select count(*)::int as count
-    from videos
+export async function setSubscriptionForUser(input: {
+  userId: string;
+  stripeSubscriptionId?: string | null;
+  stripePriceId?: string | null;
+  stripeCurrentPeriodEnd?: string | null;
+  plan?: PlanName | null;
+}) {
+  const sql = getSql();
+
+  const resolvedPlan =
+    input.plan ??
+    resolvePlanFromPriceId(input.stripePriceId ?? null) ??
+    "free";
+
+  const rows: any[] = await sql`
+    update user_profiles
+    set
+      stripe_subscription_id = ${input.stripeSubscriptionId ?? null},
+      stripe_price_id = ${input.stripePriceId ?? null},
+      stripe_current_period_end = ${input.stripeCurrentPeriodEnd ?? null}::timestamptz,
+      plan = ${resolvedPlan},
+      updated_at = now()
+    where user_id = ${input.userId}::text
+    returning *
+  `;
+
+  return (rows[0] ?? null) as UserProfileRow | null;
+}
+
+export async function setSubscriptionByCustomerId(input: {
+  stripeCustomerId: string;
+  stripeSubscriptionId?: string | null;
+  stripePriceId?: string | null;
+  stripeCurrentPeriodEnd?: string | null;
+  plan?: PlanName | null;
+}) {
+  const sql = getSql();
+
+  const resolvedPlan =
+    input.plan ??
+    resolvePlanFromPriceId(input.stripePriceId ?? null) ??
+    "free";
+
+  const rows: any[] = await sql`
+    update user_profiles
+    set
+      stripe_subscription_id = ${input.stripeSubscriptionId ?? null},
+      stripe_price_id = ${input.stripePriceId ?? null},
+      stripe_current_period_end = ${input.stripeCurrentPeriodEnd ?? null}::timestamptz,
+      plan = ${resolvedPlan},
+      updated_at = now()
+    where stripe_customer_id = ${input.stripeCustomerId}
+    returning *
+  `;
+
+  return (rows[0] ?? null) as UserProfileRow | null;
+}
+
+export async function clearSubscriptionByCustomerId(stripeCustomerId: string) {
+  const sql = getSql();
+
+  const rows: any[] = await sql`
+    update user_profiles
+    set
+      stripe_subscription_id = null,
+      stripe_price_id = null,
+      stripe_current_period_end = null,
+      plan = 'free',
+      updated_at = now()
+    where stripe_customer_id = ${stripeCustomerId}
+    returning *
+  `;
+
+  return (rows[0] ?? null) as UserProfileRow | null;
+}
+
+export async function incrementMonthlyVideoCount(userId: string) {
+  const sql = getSql();
+
+  const rows: any[] = await sql`
+    update user_profiles
+    set
+      monthly_video_count = coalesce(monthly_video_count, 0) + 1,
+      updated_at = now()
     where user_id = ${userId}::text
-      and date_trunc('month', created_at) = date_trunc('month', now())
+    returning *
   `;
 
-  return rows[0]?.count ?? 0;
+  return (rows[0] ?? null) as UserProfileRow | null;
+}
+
+export async function resetMonthlyUsageIfNeeded(userId: string) {
+  const sql = getSql();
+
+  const rows: any[] = await sql`
+    update user_profiles
+    set
+      monthly_video_count = 0,
+      monthly_video_reset_at = now(),
+      updated_at = now()
+    where user_id = ${userId}::text
+      and (
+        monthly_video_reset_at is null
+        or monthly_video_reset_at < now() - interval '1 month'
+      )
+    returning *
+  `;
+
+  return (rows[0] ?? null) as UserProfileRow | null;
 }
 
 export async function getResolvedUserPlan(userId: string) {
-  const profile = await getUserProfile(userId);
+  const profile = await getUserProfileByUserId(userId);
 
-  const plan = (profile?.plan ?? "free") as PlanName;
-  const usedThisMonth = await getMonthlyVideoUsage(userId);
+  const plan = (profile?.plan || "free") as PlanName;
+  const usedThisMonth = profile?.monthly_video_count ?? 0;
+  const rules = PLAN_RULES[plan];
   const remainingCredits = getRemainingCredits(plan, usedThisMonth);
 
   return {
-    profile,
     plan,
-    planLabel: PLAN_RULES[plan].label,
+    planLabel: rules.label,
     usedThisMonth,
     remainingCredits,
-    maxDurationSec: PLAN_RULES[plan].maxDurationSec,
-    monthlyVideoLimit: PLAN_RULES[plan].monthlyVideoLimit,
+    maxDurationSec: rules.maxDurationSec,
+    monthlyVideoLimit: rules.monthlyVideoLimit,
   };
-}
-
-export async function updateUserPlan(userId: string, plan: PlanName) {
-  const limits = getPlanLimits(plan);
-
-  const rows = await sql`
-    insert into user_profiles (
-      user_id,
-      email,
-      full_name,
-      plan,
-      monthly_video_limit,
-      max_video_seconds,
-      updated_at
-    )
-    values (
-      ${userId}::text,
-      '',
-      null,
-      ${plan},
-      ${limits.monthlyVideoLimit},
-      ${limits.maxDurationSec},
-      now()
-    )
-    on conflict (user_id)
-    do update set
-      plan = excluded.plan,
-      monthly_video_limit = excluded.monthly_video_limit,
-      max_video_seconds = excluded.max_video_seconds,
-      updated_at = now()
-    returning *
-  `;
-
-  return rows[0] ?? null;
-}
-
-export async function updateUserPlanByUserId(
-  userId: string,
-  plan: PlanName
-) {
-  return updateUserPlan(userId, plan);
-}
-
-export async function updateUserStripeCustomerId(
-  userId: string,
-  customerId: string
-) {
-  const existing = await getUserProfile(userId);
-
-  const rows = await sql`
-    insert into user_profiles (
-      user_id,
-      email,
-      full_name,
-      plan,
-      stripe_customer_id,
-      monthly_video_limit,
-      max_video_seconds,
-      updated_at
-    )
-    values (
-      ${userId}::text,
-      ${existing?.email ?? ""},
-      ${existing?.full_name ?? null},
-      ${(existing?.plan ?? "free") as PlanName},
-      ${customerId},
-      ${existing?.monthly_video_limit ?? PLAN_RULES.free.monthlyVideoLimit},
-      ${existing?.max_video_seconds ?? PLAN_RULES.free.maxDurationSec},
-      now()
-    )
-    on conflict (user_id)
-    do update set
-      stripe_customer_id = excluded.stripe_customer_id,
-      updated_at = now()
-    returning *
-  `;
-
-  return rows[0] ?? null;
-}
-
-export async function updateUserSubscriptionFromStripe(input: {
-  userId: string;
-  plan: StripeManagedPlan;
-  stripeCustomerId: string;
-  stripeSubscriptionId: string;
-  stripePriceId: string | null;
-  subscriptionStatus: string;
-}) {
-  const existing = await getUserProfile(input.userId);
-  const limits = getPlanLimits(input.plan);
-
-  const rows = await sql`
-    insert into user_profiles (
-      user_id,
-      email,
-      full_name,
-      plan,
-      stripe_customer_id,
-      stripe_subscription_id,
-      stripe_price_id,
-      subscription_status,
-      monthly_video_limit,
-      max_video_seconds,
-      updated_at
-    )
-    values (
-      ${input.userId}::text,
-      ${existing?.email ?? ""},
-      ${existing?.full_name ?? null},
-      ${input.plan},
-      ${input.stripeCustomerId},
-      ${input.stripeSubscriptionId},
-      ${input.stripePriceId},
-      ${input.subscriptionStatus},
-      ${limits.monthlyVideoLimit},
-      ${limits.maxDurationSec},
-      now()
-    )
-    on conflict (user_id)
-    do update set
-      plan = excluded.plan,
-      stripe_customer_id = excluded.stripe_customer_id,
-      stripe_subscription_id = excluded.stripe_subscription_id,
-      stripe_price_id = excluded.stripe_price_id,
-      subscription_status = excluded.subscription_status,
-      monthly_video_limit = excluded.monthly_video_limit,
-      max_video_seconds = excluded.max_video_seconds,
-      updated_at = now()
-    returning *
-  `;
-
-  return rows[0] ?? null;
-}
-
-export async function resetUserToFreePlan(userId: string) {
-  const existing = await getUserProfile(userId);
-  const limits = getPlanLimits("free");
-
-  const rows = await sql`
-    insert into user_profiles (
-      user_id,
-      email,
-      full_name,
-      plan,
-      subscription_status,
-      monthly_video_limit,
-      max_video_seconds,
-      updated_at
-    )
-    values (
-      ${userId}::text,
-      ${existing?.email ?? ""},
-      ${existing?.full_name ?? null},
-      'free',
-      'canceled',
-      ${limits.monthlyVideoLimit},
-      ${limits.maxDurationSec},
-      now()
-    )
-    on conflict (user_id)
-    do update set
-      plan = 'free',
-      subscription_status = 'canceled',
-      monthly_video_limit = ${limits.monthlyVideoLimit},
-      max_video_seconds = ${limits.maxDurationSec},
-      updated_at = now()
-    returning *
-  `;
-
-  return rows[0] ?? null;
 }
