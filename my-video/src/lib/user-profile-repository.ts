@@ -251,3 +251,20 @@ export async function updateUserSubscriptionByCustomerId(input: {
 }) {
   return setSubscriptionByCustomerId(input);
 }
+export async function updateUserPlan(input: {
+  userId: string;
+  plan: PlanName;
+}) {
+  const sql = getSql();
+
+  const rows: any[] = await sql`
+    update user_profiles
+    set
+      plan = ${input.plan},
+      updated_at = now()
+    where user_id = ${input.userId}::text
+    returning *
+  `;
+
+  return rows[0] ?? null;
+}
