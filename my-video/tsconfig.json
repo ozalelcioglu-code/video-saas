@@ -27,6 +27,6 @@
 		"**/*.tsx",
 		".next/types/**/*.ts",
 		".next/dev/types/**/*.ts"
-	],
+, "src/app/api/db-test/route.ts.disabled"	],
 	"exclude": ["node_modules", "remotion.config.ts"]
 }
