@@ -1,6 +1,7 @@
-import { sql } from "./db";
+import { getSql } from "./db";
 
 export async function getDashboardStats(userId: string) {
+  const sql = getSql();
   const totalVideosRows = await sql`
     select count(*)::int as count
     from videos
