@@ -101,6 +101,67 @@ async function createPredictionWithRetry(input: {
   throw new Error("Replicate prediction creation failed after retries");
 }
 
+async function fetchWithRetry(url: string, attempts = 8, delayMs = 3000) {
+  let lastStatus: number | null = null;
+  let lastText = "";
+
+  for (let i = 0; i < attempts; i++) {
+    const response = await fetch(url, {
+      method: "GET",
+      cache: "no-store",
+    });
+
+    lastStatus = response.status;
+
+    if (response.ok) {
+      return response;
+    }
+
+    try {
+      lastText = await response.text();
+    } catch {
+      lastText = "";
+    }
+
+    console.warn(
+      `URL not ready yet (${response.status}). Retry ${i + 1}/${attempts}: ${url}`
+    );
+
+    await sleep(delayMs);
+  }
+
+  throw new Error(
+    `URL did not become available. Last status=${lastStatus}. Body=${lastText.slice(
+      0,
+      300
+    )}`
+  );
+}
+
+async function ensurePublicUrlReady(url: string) {
+  const attempts = 10;
+
+  for (let i = 0; i < attempts; i++) {
+    const response = await fetch(url, {
+      method: "GET",
+      cache: "no-store",
+    });
+
+    if (response.ok) {
+      console.log("PUBLIC URL READY:", url);
+      return;
+    }
+
+    console.warn(
+      `Public URL not ready yet (${response.status}) retry ${i + 1}/${attempts}: ${url}`
+    );
+
+    await sleep(2500);
+  }
+
+  throw new Error(`Public URL is still not ready: ${url}`);
+}
+
 async function uploadRemoteVideoToBlob(remoteUrl: string) {
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
     throw new Error("Missing env: BLOB_READ_WRITE_TOKEN");
@@ -108,13 +169,8 @@ async function uploadRemoteVideoToBlob(remoteUrl: string) {
 
   console.log("DOWNLOADING REPLICATE VIDEO:", remoteUrl);
 
-  const response = await fetch(remoteUrl);
-
-  if (!response.ok) {
-    throw new Error(
-      `Failed to download Replicate video. Status: ${response.status}`
-    );
-  }
+  // Replicate URL bazen hemen hazır olmuyor, o yüzden retry ile indir
+  const response = await fetchWithRetry(remoteUrl, 10, 3000);
 
   const contentType =
     response.headers.get("content-type")?.toLowerCase() || "video/mp4";
@@ -141,6 +197,10 @@ async function uploadRemoteVideoToBlob(remoteUrl: string) {
   });
 
   console.log("BLOB VIDEO URL:", blob.url);
+
+  // En kritik kısım:
+  // Blob URL gerçekten yayına çıkana kadar bekle
+  await ensurePublicUrlReady(blob.url);
 
   return blob.url;
 }
