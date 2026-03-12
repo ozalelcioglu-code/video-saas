@@ -50,8 +50,10 @@ export async function POST(req: Request) {
     });
 
     if (billingMode === "test") {
-      const updated = await updateUserPlan(userId, plan);
-
+      const updated = await updateUserPlan({
+  userId,
+  plan,
+});
       return NextResponse.json(
         {
           ok: true,
