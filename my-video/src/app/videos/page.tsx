@@ -5,6 +5,8 @@ import { MyVideosClient } from "../../components/MyVideosClient";
 import { listVideosByUserId } from "../../lib/video-repository";
 import { auth } from "../../lib/auth";
 
+export const dynamic = "force-dynamic";
+
 function getLanguageFromHeaders(h: Headers) {
   const cookie = h.get("cookie") || "";
 
