@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AppPageShell } from "../components/AppPageShell";
 import { useLanguage } from "../provider/LanguageProvider";
 
@@ -13,6 +13,8 @@ type RenderStatus =
   | { status: "done"; progress: number; phase: string; url?: string }
   | { status: "error"; progress: number; phase: string; error?: string };
 
+type SceneGenerationStatus = "idle" | "generating" | "ready" | "failed";
+
 type StoryboardScene = {
   id?: string;
   title: string;
@@ -22,6 +24,8 @@ type StoryboardScene = {
   durationSec: number;
   imageUrl?: string;
   videoUrl?: string;
+  generationStatus?: SceneGenerationStatus;
+  generationError?: string;
 };
 
 type StoryboardData = {
@@ -217,6 +221,8 @@ const PAGE_TRANSLATIONS = {
       assets: "Varlıklar",
       mode: "Mod",
       scenes: "Sahneler",
+      allSceneVideosMustBeReady:
+        "Final render başlamadan önce tüm sahne videoları hazır olmalı.",
     },
     placeholders: {
       aiIdea: "Berlin'deki bir kahve dükkanı için sinematik bir reklam oluştur",
@@ -348,6 +354,8 @@ const PAGE_TRANSLATIONS = {
       assets: "Assets",
       mode: "Mode",
       scenes: "Scenes",
+      allSceneVideosMustBeReady:
+        "All scene videos must be ready before final rendering.",
     },
     placeholders: {
       aiIdea: "Create a cinematic ad for a coffee shop in Berlin",
@@ -482,6 +490,8 @@ const PAGE_TRANSLATIONS = {
       assets: "Assets",
       mode: "Modus",
       scenes: "Szenen",
+      allSceneVideosMustBeReady:
+        "Vor dem finalen Rendering müssen alle Szenenvideos bereit sein.",
     },
     placeholders: {
       aiIdea: "Erstelle eine kinoreife Werbung für ein Café in Berlin",
@@ -563,6 +573,9 @@ export default function Page() {
     monthlyVideoLimit?: number | null;
     usedThisMonth?: number;
   } | null>(null);
+
+  const sceneVideoCacheRef = useRef<Map<string, string>>(new Map());
+  const [sceneGenerationLocked, setSceneGenerationLocked] = useState(false);
 
   useEffect(() => {
     setBaseUrl(window.location.origin);
@@ -675,6 +688,45 @@ export default function Page() {
     ]
   );
 
+  function getSceneCacheKey(scene: StoryboardScene) {
+    return [
+      scene.imageUrl ?? "",
+      scene.prompt ?? "",
+      scene.durationSec ?? 0,
+      ratio,
+      mode,
+    ].join("::");
+  }
+
+  function updateSingleScene(index: number, patch: Partial<StoryboardScene>) {
+    setStoryboard((prev) => {
+      if (!prev) return prev;
+
+      const scenes = [...prev.scenes];
+      scenes[index] = {
+        ...scenes[index],
+        ...patch,
+      };
+
+      return {
+        ...prev,
+        scenes,
+      };
+    });
+  }
+
+  function allScenesReadyForRender(data: StoryboardData | null) {
+    if (!data?.scenes?.length) return false;
+
+    const scenesThatNeedVideo = data.scenes.filter((scene) => !!scene.imageUrl);
+
+    if (scenesThatNeedVideo.length === 0) {
+      return true;
+    }
+
+    return scenesThatNeedVideo.every((scene) => !!scene.videoUrl);
+  }
+
   async function uploadFiles(files: FileList) {
     const form = new FormData();
     Array.from(files).forEach((f) => form.append("files", f));
@@ -760,7 +812,16 @@ export default function Page() {
         throw new Error("No storyboard returned");
       }
 
-      setStoryboard(data.storyboard);
+      setStoryboard({
+        ...data.storyboard,
+        scenes: (data.storyboard.scenes || []).map(
+          (scene: StoryboardScene) => ({
+            ...scene,
+            generationStatus: scene.videoUrl ? "ready" : "idle",
+            generationError: "",
+          })
+        ),
+      });
     } catch (err: any) {
       setStoryboardError(err?.message ?? "Storyboard generation failed");
     } finally {
@@ -893,6 +954,8 @@ export default function Page() {
               "cinematic realistic commercial still frame, soft lighting, premium composition, shallow depth of field",
             onScreenText: "New Scene",
             durationSec: 4,
+            generationStatus: "idle",
+            generationError: "",
           },
         ],
       };
@@ -925,6 +988,7 @@ export default function Page() {
     setUpgradeModalOpen(false);
     setUpgradeMessage("");
     setUpgradeDetails(null);
+    sceneVideoCacheRef.current.clear();
   }
 
   async function generateSceneVideos() {
@@ -933,23 +997,59 @@ export default function Page() {
       return;
     }
 
+    if (sceneGenerationLocked) {
+      return;
+    }
+
     try {
+      setSceneGenerationLocked(true);
+
       setStatus({
         status: "rendering",
         progress: 10,
         phase: t.states.generatingSceneVideos,
       });
 
-      const updatedScenes: StoryboardScene[] = [];
       const total = storyboard.scenes.length;
+      let generatedCount = 0;
+      let anyFailure = false;
 
       for (let index = 0; index < total; index++) {
-        const scene = storyboard.scenes[index];
+        const currentScene = storyboard.scenes[index];
 
-        if (!scene.imageUrl) {
-          updatedScenes.push(scene);
+        if (!currentScene.imageUrl) {
+          updateSingleScene(index, {
+            generationStatus: currentScene.videoUrl ? "ready" : "idle",
+            generationError: "",
+          });
           continue;
         }
+
+        if (currentScene.videoUrl) {
+          updateSingleScene(index, {
+            generationStatus: "ready",
+            generationError: "",
+          });
+          continue;
+        }
+
+        const cacheKey = getSceneCacheKey(currentScene);
+        const cachedVideoUrl = sceneVideoCacheRef.current.get(cacheKey);
+
+        if (cachedVideoUrl) {
+          updateSingleScene(index, {
+            videoUrl: cachedVideoUrl,
+            generationStatus: "ready",
+            generationError: "",
+          });
+          generatedCount += 1;
+          continue;
+        }
+
+        updateSingleScene(index, {
+          generationStatus: "generating",
+          generationError: "",
+        });
 
         setStatus({
           status: "rendering",
@@ -967,38 +1067,57 @@ export default function Page() {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              imageUrl: scene.imageUrl,
-              prompt: scene.prompt,
+              imageUrl: currentScene.imageUrl,
+              prompt: currentScene.prompt,
+              durationSec: currentScene.durationSec,
+              cacheKey,
             }),
           });
 
-          const data = await res.json();
+          const data = await res.json().catch(() => null);
 
-          if (data.ok && data.videoUrl) {
-            updatedScenes.push({
-              ...scene,
-              videoUrl: data.videoUrl,
-            });
-          } else {
-            updatedScenes.push(scene);
+          if (!res.ok) {
+            throw new Error(
+              data?.error || t.states.sceneVideoGenerationFailed
+            );
           }
-        } catch (error) {
-          console.error("Scene video generation failed:", error);
-          updatedScenes.push(scene);
-        }
 
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+          if (!data?.ok || !data?.videoUrl) {
+            throw new Error(
+              data?.error || t.states.sceneVideoGenerationFailed
+            );
+          }
+
+          sceneVideoCacheRef.current.set(cacheKey, data.videoUrl);
+
+          updateSingleScene(index, {
+            videoUrl: data.videoUrl,
+            generationStatus: "ready",
+            generationError: "",
+          });
+
+          generatedCount += 1;
+        } catch (error: any) {
+          console.error("Scene video generation failed:", error);
+          anyFailure = true;
+
+          updateSingleScene(index, {
+            generationStatus: "failed",
+            generationError:
+              error?.message || t.states.sceneVideoGenerationFailed,
+          });
+        }
       }
 
-      setStoryboard({
-        ...storyboard,
-        scenes: updatedScenes,
-      });
-
       setStatus({
-        status: "idle",
+        status: anyFailure ? "error" : "idle",
         progress: 0,
-        phase: t.states.sceneVideosGenerated,
+        phase: anyFailure
+          ? t.states.sceneVideoGenerationFailed
+          : t.states.sceneVideosGenerated,
+        ...(anyFailure
+          ? { error: t.states.sceneVideoGenerationFailed }
+          : {}),
       });
     } catch (error) {
       console.error(error);
@@ -1009,6 +1128,8 @@ export default function Page() {
         phase: t.states.sceneVideoGenerationFailed,
         error: t.states.sceneVideoGenerationFailed,
       });
+    } finally {
+      setSceneGenerationLocked(false);
     }
   }
 
@@ -1021,6 +1142,25 @@ export default function Page() {
         error: `${t.states.baseUrlNotReady}. Refresh once.`,
       });
       return;
+    }
+
+    if (mode === "text" && storyboard?.scenes?.length) {
+      const scenesWithImages = storyboard.scenes.filter(
+        (scene) => !!scene.imageUrl
+      );
+      const missingSceneVideos = scenesWithImages.some(
+        (scene) => !scene.videoUrl
+      );
+
+      if (missingSceneVideos) {
+        setStatus({
+          status: "error",
+          progress: 0,
+          phase: t.states.sceneVideoGenerationFailed,
+          error: t.states.allSceneVideosMustBeReady,
+        });
+        return;
+      }
     }
 
     setStatus({
@@ -1600,7 +1740,8 @@ export default function Page() {
                       disabled={
                         storyboardLoading ||
                         !storyboard?.scenes?.length ||
-                        status.status === "rendering"
+                        status.status === "rendering" ||
+                        sceneGenerationLocked
                       }
                       style={styles.secondaryBtn}
                     >
@@ -1799,7 +1940,11 @@ export default function Page() {
                             {t.states.image}:{" "}
                             {scene.imageUrl ? t.states.yes : t.states.no} —{" "}
                             {t.states.video}:{" "}
-                            {scene.videoUrl ? t.states.yes : t.states.no}
+                            {scene.videoUrl ? t.states.yes : t.states.no} — Status:{" "}
+                            {scene.generationStatus ?? "idle"}
+                            {scene.generationError
+                              ? ` — ${scene.generationError}`
+                              : ""}
                           </div>
                         </div>
                       ))}
@@ -1971,7 +2116,8 @@ export default function Page() {
                     onClick={generateSceneVideos}
                     disabled={
                       !storyboard?.scenes?.length ||
-                      status.status === "rendering"
+                      status.status === "rendering" ||
+                      sceneGenerationLocked
                     }
                     style={styles.secondaryBtn}
                   >
