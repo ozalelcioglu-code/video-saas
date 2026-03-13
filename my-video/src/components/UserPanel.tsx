@@ -1,6 +1,6 @@
 "use client";
 
-import { authClient } from "../lib/auth-client";
+import { useLanguage } from "../provider/LanguageProvider";
 
 type Props = {
   name?: string | null;
@@ -15,24 +15,21 @@ export function UserPanel({
   planLabel,
   remainingCredits,
 }: Props) {
+  const { t } = useLanguage();
+
   const styles = {
     wrap: {
       display: "grid",
       gap: 10,
-      marginTop: 14,
-      paddingTop: 16,
-      borderTop: "1px solid rgba(255,255,255,0.08)",
-    } as React.CSSProperties,
-    userBox: {
-      padding: "12px 14px",
-      borderRadius: 14,
+      padding: 16,
+      borderRadius: 18,
       background: "rgba(255,255,255,0.04)",
       border: "1px solid rgba(255,255,255,0.08)",
     } as React.CSSProperties,
     name: {
       color: "#f5f9ff",
       fontWeight: 800,
-      fontSize: 14,
+      fontSize: 15,
       marginBottom: 4,
     } as React.CSSProperties,
     email: {
@@ -55,46 +52,23 @@ export function UserPanel({
       border: "1px solid rgba(59,130,246,0.22)",
       color: "#d7ebff",
     } as React.CSSProperties,
-    button: {
-      padding: "12px 14px",
-      borderRadius: 14,
-      border: "1px solid rgba(255,255,255,0.1)",
-      background: "rgba(255,255,255,0.04)",
-      color: "#dce8f8",
-      cursor: "pointer",
-      fontWeight: 800,
-      width: "100%",
-    } as React.CSSProperties,
-  };
-
-  const handleLogout = async () => {
-    try {
-      await authClient.signOut();
-      window.location.href = "/login";
-    } catch (error) {
-      console.error("Logout failed:", error);
-    }
   };
 
   return (
     <div style={styles.wrap}>
-      <div style={styles.userBox}>
-        <div style={styles.name}>{name || "Signed in user"}</div>
+      <div>
+        <div style={styles.name}>{name || t.common.signedInUser}</div>
         <div style={styles.email}>{email || "-"}</div>
-
-        <div style={styles.meta}>
-          <div style={styles.badge}>{planLabel || "Free"}</div>
-          <div style={styles.badge}>
-            {remainingCredits === null
-              ? "Unlimited credits"
-              : `${remainingCredits} credits left`}
-          </div>
-        </div>
       </div>
 
-      <button style={styles.button} onClick={handleLogout}>
-        Logout
-      </button>
+      <div style={styles.meta}>
+        <div style={styles.badge}>{planLabel || t.common.freePlan}</div>
+        <div style={styles.badge}>
+          {remainingCredits === null
+            ? t.common.unlimitedCredits
+            : `${remainingCredits} ${t.common.creditsLeft}`}
+        </div>
+      </div>
     </div>
   );
 }

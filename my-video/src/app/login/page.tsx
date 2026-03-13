@@ -1,68 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { authClient } from "../../lib/auth-client";
-
-type Lang = "tr" | "en" | "de";
-
-function getLanguage(): Lang {
-  const match = document.cookie.match(/app-language=(tr|en|de)/);
-  if (match) return match[1] as Lang;
-
-  const browser = navigator.language;
-
-  if (browser.startsWith("tr")) return "tr";
-  if (browser.startsWith("de")) return "de";
-
-  return "en";
-}
-
-const TEXT = {
-  tr: {
-    subtitle: "AI video çalışma alanınızı yönetmek için giriş yapın.",
-    login: "Giriş Yap",
-    signup: "Kayıt Ol",
-    fullName: "Ad Soyad",
-    email: "Email",
-    password: "Şifre",
-    createAccount: "Hesap Oluştur",
-    pleaseWait: "Lütfen bekleyin...",
-    signupFailed: "Kayıt başarısız",
-    loginFailed: "Giriş başarısız",
-    authFailed: "Kimlik doğrulama başarısız",
-  },
-
-  en: {
-    subtitle: "Sign in to manage your AI video workspace.",
-    login: "Login",
-    signup: "Sign Up",
-    fullName: "Full Name",
-    email: "Email",
-    password: "Password",
-    createAccount: "Create account",
-    pleaseWait: "Please wait...",
-    signupFailed: "Signup failed",
-    loginFailed: "Login failed",
-    authFailed: "Auth failed",
-  },
-
-  de: {
-    subtitle: "Melden Sie sich an, um Ihren KI-Video-Arbeitsbereich zu verwalten.",
-    login: "Anmelden",
-    signup: "Registrieren",
-    fullName: "Vollständiger Name",
-    email: "Email",
-    password: "Passwort",
-    createAccount: "Konto erstellen",
-    pleaseWait: "Bitte warten...",
-    signupFailed: "Registrierung fehlgeschlagen",
-    loginFailed: "Anmeldung fehlgeschlagen",
-    authFailed: "Authentifizierung fehlgeschlagen",
-  },
-};
+import { useLanguage } from "../../provider/LanguageProvider";
+import { useSession } from "../../provider/SessionProvider";
 
 export default function LoginPage() {
-  const [lang, setLang] = useState<Lang>("en");
+  const router = useRouter();
+  const { t } = useLanguage();
+  const { refreshSession } = useSession();
 
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [name, setName] = useState("");
@@ -73,17 +20,12 @@ export default function LoginPage() {
   const [msg, setMsg] = useState("");
 
   useEffect(() => {
-    setLang(getLanguage());
-  }, []);
-
-  const t = TEXT[lang];
-
-  useEffect(() => {
     const check = async () => {
       try {
         const session = await authClient.getSession();
         if (session?.data?.session) {
-          window.location.href = "/";
+          router.replace("/");
+          router.refresh();
         }
       } catch (error) {
         console.error(error);
@@ -91,21 +33,113 @@ export default function LoginPage() {
     };
 
     check();
-  }, []);
+  }, [router]);
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setMsg("");
+
+    try {
+      if (mode === "signup") {
+        const result = await authClient.signUp.email({
+          email,
+          password,
+          name,
+        });
+
+        if (result.error) {
+          setMsg(result.error.message || t.auth.signupFailed);
+        } else {
+          await refreshSession();
+          router.push("/");
+          router.refresh();
+        }
+      } else {
+        const result = await authClient.signIn.email({
+          email,
+          password,
+        });
+
+        if (result.error) {
+          setMsg(result.error.message || t.auth.loginFailed);
+        } else {
+          await refreshSession();
+          router.push("/");
+          router.refresh();
+        }
+      }
+    } catch (err: any) {
+      setMsg(err?.message || t.auth.authFailed);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const styles = {
     page: {
       minHeight: "100vh",
       display: "grid",
-      placeItems: "center",
+      gridTemplateColumns: "1.05fr 0.95fr",
       background:
         "radial-gradient(1000px 500px at 15% -10%, rgba(59,130,246,0.18), transparent 50%), radial-gradient(900px 450px at 90% 0%, rgba(139,92,246,0.12), transparent 45%), #06101d",
       color: "#e7eef9",
       fontFamily:
         "Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial",
-      padding: 24,
     } as React.CSSProperties,
-
+    hero: {
+      padding: "48px 42px",
+      display: "flex",
+      flexDirection: "column" as const,
+      justifyContent: "center",
+      gap: 24,
+      borderRight: "1px solid rgba(255,255,255,0.08)",
+    } as React.CSSProperties,
+    heroLogo: {
+      display: "flex",
+      alignItems: "center",
+      gap: 14,
+    } as React.CSSProperties,
+    logo: {
+      width: 64,
+      height: 64,
+      borderRadius: 18,
+      overflow: "hidden",
+      border: "1px solid rgba(255,255,255,0.08)",
+      boxShadow: "0 16px 40px rgba(0,0,0,0.28)",
+    } as React.CSSProperties,
+    heroTitle: {
+      fontSize: 46,
+      fontWeight: 950,
+      lineHeight: 1.06,
+      letterSpacing: -1.2,
+      margin: 0,
+      maxWidth: 620,
+    } as React.CSSProperties,
+    heroText: {
+      fontSize: 15,
+      lineHeight: 1.7,
+      color: "rgba(231,238,249,0.72)",
+      maxWidth: 620,
+    } as React.CSSProperties,
+    featureList: {
+      display: "grid",
+      gap: 12,
+      maxWidth: 560,
+    } as React.CSSProperties,
+    featureItem: {
+      padding: "14px 16px",
+      borderRadius: 16,
+      background: "rgba(255,255,255,0.04)",
+      border: "1px solid rgba(255,255,255,0.08)",
+      color: "#dce8f8",
+      fontWeight: 700,
+    } as React.CSSProperties,
+    authWrap: {
+      padding: 24,
+      display: "grid",
+      placeItems: "center",
+    } as React.CSSProperties,
     card: {
       width: "100%",
       maxWidth: 460,
@@ -115,40 +149,23 @@ export default function LoginPage() {
       padding: 24,
       boxShadow: "0 16px 40px rgba(0,0,0,0.28)",
     } as React.CSSProperties,
-
-    logoWrap: {
-      display: "flex",
-      alignItems: "center",
-      gap: 14,
-      marginBottom: 22,
-    } as React.CSSProperties,
-
-    logo: {
-      width: 58,
-      height: 58,
-      borderRadius: 18,
-      overflow: "hidden",
-      border: "1px solid rgba(255,255,255,0.08)",
-    } as React.CSSProperties,
-
-    title: {
+    cardTitle: {
       fontSize: 28,
       fontWeight: 900,
       margin: 0,
     } as React.CSSProperties,
-
     sub: {
-      marginTop: 6,
+      marginTop: 8,
       color: "rgba(231,238,249,0.65)",
       fontSize: 14,
+      lineHeight: 1.6,
     } as React.CSSProperties,
-
     tabs: {
       display: "flex",
       gap: 10,
+      marginTop: 20,
       marginBottom: 18,
     } as React.CSSProperties,
-
     tab: (active: boolean) =>
       ({
         flex: 1,
@@ -164,20 +181,17 @@ export default function LoginPage() {
         cursor: "pointer",
         fontWeight: 800,
       }) as React.CSSProperties,
-
     field: {
       display: "grid",
       gap: 8,
       marginBottom: 14,
     } as React.CSSProperties,
-
     label: {
       fontSize: 12,
       fontWeight: 800,
       color: "rgba(231,238,249,0.75)",
-      textTransform: "uppercase",
+      textTransform: "uppercase" as const,
     } as React.CSSProperties,
-
     input: {
       width: "100%",
       padding: "12px 14px",
@@ -187,7 +201,6 @@ export default function LoginPage() {
       color: "#e7eef9",
       outline: "none",
     } as React.CSSProperties,
-
     button: {
       width: "100%",
       padding: "12px 16px",
@@ -200,55 +213,18 @@ export default function LoginPage() {
       fontWeight: 900,
       marginTop: 8,
     } as React.CSSProperties,
-
     msg: {
       marginTop: 12,
       fontSize: 13,
-      color: "rgba(231,238,249,0.7)",
+      color: "#ffcccc",
       lineHeight: 1.5,
     } as React.CSSProperties,
   };
 
-  const onSubmit = async () => {
-    setLoading(true);
-    setMsg("");
-
-    try {
-      if (mode === "signup") {
-        const result = await authClient.signUp.email({
-          email,
-          password,
-          name,
-        });
-
-        if (result.error) {
-          setMsg(result.error.message || t.signupFailed);
-        } else {
-          window.location.href = "/";
-        }
-      } else {
-        const result = await authClient.signIn.email({
-          email,
-          password,
-        });
-
-        if (result.error) {
-          setMsg(result.error.message || t.loginFailed);
-        } else {
-          window.location.href = "/";
-        }
-      }
-    } catch (err: any) {
-      setMsg(err?.message || t.authFailed);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <div style={styles.page}>
-      <div style={styles.card}>
-        <div style={styles.logoWrap}>
+      <section style={styles.hero}>
+        <div style={styles.heroLogo}>
           <div style={styles.logo}>
             <img
               src="/Professional Emblem Logo in Blue and Silver.png"
@@ -258,61 +234,89 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <h1 style={styles.title}>Duble-S Motion AI</h1>
-            <div style={styles.sub}>{t.subtitle}</div>
+            <div style={{ fontSize: 24, fontWeight: 900 }}>Duble-S Motion AI</div>
+            <div style={{ color: "rgba(231,238,249,0.62)", marginTop: 4 }}>
+              {t.header.workspace}
+            </div>
           </div>
         </div>
 
-        <div style={styles.tabs}>
-          <button style={styles.tab(mode === "login")} onClick={() => setMode("login")}>
-            {t.login}
-          </button>
+        <h1 style={styles.heroTitle}>{t.auth.title}</h1>
+        <div style={styles.heroText}>{t.auth.description}</div>
 
-          <button style={styles.tab(mode === "signup")} onClick={() => setMode("signup")}>
-            {t.signup}
-          </button>
+        <div style={styles.featureList}>
+          <div style={styles.featureItem}>{t.auth.feature1}</div>
+          <div style={styles.featureItem}>{t.auth.feature2}</div>
+          <div style={styles.featureItem}>{t.auth.feature3}</div>
         </div>
+      </section>
 
-        {mode === "signup" && (
-          <div style={styles.field}>
-            <div style={styles.label}>{t.fullName}</div>
-            <input
-              style={styles.input}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
+      <section style={styles.authWrap}>
+        <div style={styles.card}>
+          <h2 style={styles.cardTitle}>
+            {mode === "login" ? t.auth.welcomeBack : t.auth.createNewAccount}
+          </h2>
+          <div style={styles.sub}>{t.auth.subtitle}</div>
+
+          <div style={styles.tabs}>
+            <button type="button" style={styles.tab(mode === "login")} onClick={() => setMode("login")}>
+              {t.common.login}
+            </button>
+
+            <button type="button" style={styles.tab(mode === "signup")} onClick={() => setMode("signup")}>
+              {t.common.signup}
+            </button>
           </div>
-        )}
 
-        <div style={styles.field}>
-          <div style={styles.label}>{t.email}</div>
-          <input
-            style={styles.input}
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
+          <form onSubmit={onSubmit}>
+            {mode === "signup" && (
+              <div style={styles.field}>
+                <div style={styles.label}>{t.auth.fullName}</div>
+                <input
+                  style={styles.input}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  autoComplete="name"
+                />
+              </div>
+            )}
+
+            <div style={styles.field}>
+              <div style={styles.label}>{t.auth.email}</div>
+              <input
+                type="email"
+                style={styles.input}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+                required
+              />
+            </div>
+
+            <div style={styles.field}>
+              <div style={styles.label}>{t.auth.password}</div>
+              <input
+                type="password"
+                style={styles.input}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
+                required
+              />
+            </div>
+
+            <button style={styles.button} type="submit" disabled={loading}>
+              {loading
+                ? t.auth.pleaseWait
+                : mode === "login"
+                ? t.common.login
+                : t.auth.createAccount}
+            </button>
+          </form>
+
+          {msg ? <div style={styles.msg}>{msg}</div> : null}
         </div>
-
-        <div style={styles.field}>
-          <div style={styles.label}>{t.password}</div>
-          <input
-            type="password"
-            style={styles.input}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </div>
-
-        <button style={styles.button} onClick={onSubmit} disabled={loading}>
-          {loading
-            ? t.pleaseWait
-            : mode === "login"
-            ? t.login
-            : t.createAccount}
-        </button>
-
-        {msg ? <div style={styles.msg}>{msg}</div> : null}
-      </div>
+      </section>
     </div>
   );
 }

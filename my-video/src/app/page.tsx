@@ -1,11 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AppSidebar } from "../components/AppSidebar";
-import {
-  getInitialLanguage,
-  type AppLanguage,
-} from "../lib/i18n";
+import { AppPageShell } from "../components/AppPageShell";
+import { useLanguage } from "../provider/LanguageProvider";
 
 type Ratio = "square" | "vertical" | "horizontal";
 type Mode = "images" | "text" | "product";
@@ -170,7 +167,8 @@ const PAGE_TRANSLATIONS = {
     },
     hints: {
       logo: "En temiz marka sonucu için kare ve şeffaf bir logo yükleyin.",
-      images: "En fazla 6 görsel yükleyin. Temiz ve yüksek çözünürlüklü içerikler kullanın.",
+      images:
+        "En fazla 6 görsel yükleyin. Temiz ve yüksek çözünürlüklü içerikler kullanın.",
       aiIdea:
         "Bu fikir storyboard üretimini, sahne promptlarını, görselleri ve final hareketli klipleri yönlendirir.",
       productUrl:
@@ -389,7 +387,8 @@ const PAGE_TRANSLATIONS = {
       projectSetupSub:
         "Konfigurieren Sie Marke, Quelltyp, Szenen und Produktionsablauf in einem einzigen Arbeitsbereich.",
       preview: "Vorschau",
-      previewSub: "Die finale Ausgabe erscheint hier, sobald das Rendering abgeschlossen ist.",
+      previewSub:
+        "Die finale Ausgabe erscheint hier, sobald das Rendering abgeschlossen ist.",
       quickSummary: "Kurzübersicht",
       quickSummarySub:
         "Ein schneller Überblick über das aktive Projekt und den Produktionsstatus.",
@@ -432,7 +431,8 @@ const PAGE_TRANSLATIONS = {
     },
     hints: {
       logo: "Laden Sie ein quadratisches transparentes Logo für das sauberste Markenergebnis hoch.",
-      images: "Laden Sie bis zu 6 Bilder hoch. Verwenden Sie saubere, hochauflösende Inhalte.",
+      images:
+        "Laden Sie bis zu 6 Bilder hoch. Verwenden Sie saubere, hochauflösende Inhalte.",
       aiIdea:
         "Diese Idee steuert die Storyboard-Erstellung, Szenen-Prompts, Bilder und die finalen Motion-Clips.",
       productUrl:
@@ -512,11 +512,14 @@ function formatTemplate(
 }
 
 export default function Page() {
-  const [language, setLanguage] = useState<AppLanguage>("en");
+  const { language } = useLanguage();
+
   const [mode, setMode] = useState<Mode>("text");
 
   const [brand, setBrand] = useState("Duble-S Technology");
-  const [slogan, setSlogan] = useState("Digital Solutions for Modern Businesses");
+  const [slogan, setSlogan] = useState(
+    "Digital Solutions for Modern Businesses"
+  );
   const [text, setText] = useState(
     "We build modern websites and custom software. Fast, secure, scalable."
   );
@@ -527,9 +530,8 @@ export default function Page() {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
 
-  const [prompt] = useState(
-    "Create a cinematic 20–30s marketing video for a web development & software company. Emphasize speed, quality, and trust."
-  );
+  const prompt =
+    "Create a cinematic 20–30s marketing video for a web development & software company. Emphasize speed, quality, and trust.";
 
   const [productUrl, setProductUrl] = useState("");
   const [productTitle, setProductTitle] = useState("");
@@ -564,7 +566,6 @@ export default function Page() {
 
   useEffect(() => {
     setBaseUrl(window.location.origin);
-    setLanguage(getInitialLanguage());
   }, []);
 
   const t = PAGE_TRANSLATIONS[language];
@@ -1158,49 +1159,6 @@ export default function Page() {
         : 0;
 
   const styles = {
-    page: {
-      minHeight: "100vh",
-      background: "#06101d",
-      color: "#e7eef9",
-      fontFamily:
-        "Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial",
-    } as React.CSSProperties,
-
-    layout: {
-      display: "grid",
-      gridTemplateColumns: "270px 1fr",
-      minHeight: "100vh",
-    } as React.CSSProperties,
-
-    main: {
-      padding: 22,
-      background:
-        "radial-gradient(1000px 500px at 15% -10%, rgba(59,130,246,0.18), transparent 50%), radial-gradient(900px 450px at 90% 0%, rgba(139,92,246,0.12), transparent 45%), #06101d",
-    } as React.CSSProperties,
-
-    topbar: {
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "flex-start",
-      gap: 16,
-      marginBottom: 18,
-    } as React.CSSProperties,
-
-    topTitle: {
-      fontSize: 30,
-      fontWeight: 950,
-      margin: 0,
-      letterSpacing: -0.5,
-    } as React.CSSProperties,
-
-    topSub: {
-      marginTop: 8,
-      fontSize: 14,
-      color: "rgba(231,238,249,0.68)",
-      maxWidth: 680,
-      lineHeight: 1.5,
-    } as React.CSSProperties,
-
     topBadges: {
       display: "flex",
       gap: 10,
@@ -1223,6 +1181,7 @@ export default function Page() {
       display: "flex",
       gap: 10,
       marginBottom: 18,
+      flexWrap: "wrap" as const,
     } as React.CSSProperties,
 
     modeTab: (active: boolean) =>
@@ -1525,80 +1484,625 @@ export default function Page() {
   };
 
   return (
-    <div style={styles.page}>
-      <div style={styles.layout}>
-        <AppSidebar />
+    <>
+      <AppPageShell
+        title={t.page.title}
+        subtitle={t.page.subtitle}
+        rightSlot={
+          <div style={styles.topBadges}>
+            <div style={styles.badge}>{MODE_LABEL[mode]}</div>
+            <div style={styles.badge}>{RATIO_LABEL[ratio]}</div>
+            <div style={styles.badge}>
+              {status.status === "rendering"
+                ? status.phase || t.page.rendering
+                : status.status === "done"
+                  ? t.page.ready
+                  : status.status === "error"
+                    ? t.page.error
+                    : t.page.idle}
+            </div>
+          </div>
+        }
+      >
+        <div style={styles.modeTabs}>
+          {(["text", "images", "product"] as Mode[]).map((m) => (
+            <button
+              key={m}
+              style={styles.modeTab(mode === m)}
+              onClick={() => setMode(m)}
+            >
+              {MODE_LABEL[m]}
+            </button>
+          ))}
+        </div>
 
-        <main style={styles.main}>
-          <div style={styles.topbar}>
-            <div>
-              <h2 style={styles.topTitle}>{t.page.title}</h2>
-              <div style={styles.topSub}>{t.page.subtitle}</div>
+        <div style={styles.contentGrid}>
+          <section style={styles.card}>
+            <div style={styles.cardHeader}>
+              <h3 style={styles.cardTitle}>{t.page.projectSetup}</h3>
+              <div style={styles.cardSub}>{t.page.projectSetupSub}</div>
             </div>
 
-            <div style={styles.topBadges}>
-              <div style={styles.badge}>{MODE_LABEL[mode]}</div>
-              <div style={styles.badge}>{RATIO_LABEL[ratio]}</div>
-              <div style={styles.badge}>
-                {status.status === "rendering"
-                  ? status.phase || t.page.rendering
-                  : status.status === "done"
-                    ? t.page.ready
-                    : status.status === "error"
-                      ? t.page.error
-                      : t.page.idle}
+            <div style={styles.cardBody}>
+              {mode === "images" && (
+                <>
+                  <div style={styles.field}>
+                    <div style={styles.label}>{t.fields.logo}</div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={onPickLogo}
+                      style={styles.input}
+                    />
+                    <div style={styles.hint}>{t.hints.logo}</div>
+                  </div>
+
+                  <div style={styles.field}>
+                    <div style={styles.label}>{t.fields.images}</div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={onPickImages}
+                      style={styles.input}
+                    />
+                    <div style={styles.hint}>{t.hints.images}</div>
+
+                    {imageUrls.length > 0 && (
+                      <div style={styles.thumbGrid}>
+                        {imageUrls.slice(0, 3).map((u) => (
+                          <div key={u} style={styles.thumb}>
+                            <img
+                              src={u}
+                              alt=""
+                              style={{
+                                width: "100%",
+                                height: "100%",
+                                objectFit: "cover",
+                              }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {mode === "text" && (
+                <>
+                  <div style={styles.field}>
+                    <div style={styles.label}>{t.fields.aiIdea}</div>
+                    <textarea
+                      value={idea}
+                      onChange={(e) => setIdea(e.target.value)}
+                      style={{ ...styles.textarea, minHeight: 130 }}
+                      placeholder={t.placeholders.aiIdea}
+                    />
+                    <div style={styles.hint}>{t.hints.aiIdea}</div>
+                  </div>
+
+                  <div style={styles.actions}>
+                    <button
+                      onClick={generateStoryboard}
+                      disabled={storyboardLoading || !idea.trim()}
+                      style={styles.primaryBtn(
+                        storyboardLoading || !idea.trim()
+                      )}
+                    >
+                      {storyboardLoading
+                        ? t.buttons.generatingStoryboard
+                        : t.buttons.generateStoryboard}
+                    </button>
+
+                    <button
+                      onClick={generateSceneVideos}
+                      disabled={
+                        storyboardLoading ||
+                        !storyboard?.scenes?.length ||
+                        status.status === "rendering"
+                      }
+                      style={styles.secondaryBtn}
+                    >
+                      {t.buttons.generateSceneVideos}
+                    </button>
+                  </div>
+
+                  {storyboardError && (
+                    <div
+                      style={{ marginTop: 10, color: "#ffb4b4", fontWeight: 800 }}
+                    >
+                      {storyboardError}
+                    </div>
+                  )}
+
+                  {storyboard && (
+                    <div style={styles.storyboardCard}>
+                      <div style={styles.field}>
+                        <div style={styles.label}>{t.fields.storyboardTitle}</div>
+                        <input
+                          value={storyboard.title}
+                          onChange={(e) => updateStoryboardTitle(e.target.value)}
+                          style={styles.input}
+                        />
+                      </div>
+
+                      <div style={{ ...styles.small, marginBottom: 12 }}>
+                        Vibe: <b>{storyboard?.brand_tone?.vibe ?? "-"}</b> —
+                        Keywords:{" "}
+                        {storyboard?.brand_tone?.keywords?.join(", ") ?? "-"}
+                      </div>
+
+                      <div style={styles.field}>
+                        <div style={styles.label}>{t.fields.hook}</div>
+                        <textarea
+                          value={storyboard?.script?.hook ?? ""}
+                          onChange={(e) => updateStoryboardHook(e.target.value)}
+                          style={{ ...styles.textarea, minHeight: 80 }}
+                        />
+                      </div>
+
+                      <div style={styles.field}>
+                        <div style={styles.label}>{t.fields.cta}</div>
+                        <input
+                          value={storyboard?.script?.cta ?? ""}
+                          onChange={(e) => updateStoryboardCta(e.target.value)}
+                          style={styles.input}
+                        />
+                      </div>
+
+                      <div style={{ fontWeight: 900, marginBottom: 8 }}>
+                        {t.fields.bodyLines}
+                      </div>
+
+                      {storyboard?.script?.body?.map((line, index) => (
+                        <div key={index} style={{ ...styles.row, marginBottom: 8 }}>
+                          <input
+                            value={line}
+                            onChange={(e) =>
+                              updateStoryboardBody(index, e.target.value)
+                            }
+                            style={styles.input}
+                          />
+                          <button
+                            style={styles.dangerBtn}
+                            onClick={() => removeStoryboardBodyLine(index)}
+                          >
+                            {t.buttons.removeLine}
+                          </button>
+                        </div>
+                      ))}
+
+                      <div style={styles.actions}>
+                        <button
+                          style={styles.secondaryBtn}
+                          onClick={addStoryboardBodyLine}
+                        >
+                          {t.buttons.addBodyLine}
+                        </button>
+                      </div>
+
+                      <div style={styles.divider} />
+
+                      <div style={{ fontWeight: 900, marginBottom: 8 }}>
+                        {t.fields.scenes}
+                      </div>
+
+                      {storyboard.scenes.map((scene, index) => (
+                        <div
+                          key={scene.id ?? index}
+                          style={{ ...styles.storyboardCard, marginTop: 10 }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              gap: 10,
+                              marginBottom: 10,
+                            }}
+                          >
+                            <div style={{ fontWeight: 900 }}>
+                              {t.fields.scenes} {index + 1}
+                            </div>
+                            <button
+                              style={styles.dangerBtn}
+                              onClick={() => removeStoryboardScene(index)}
+                            >
+                              {t.buttons.removeScene}
+                            </button>
+                          </div>
+
+                          <div style={styles.field}>
+                            <div style={styles.label}>{t.fields.sceneTitle}</div>
+                            <input
+                              value={scene.title}
+                              onChange={(e) =>
+                                updateStoryboardScene(
+                                  index,
+                                  "title",
+                                  e.target.value
+                                )
+                              }
+                              style={styles.input}
+                            />
+                          </div>
+
+                          <div style={styles.row}>
+                            <div style={styles.field}>
+                              <div style={styles.label}>
+                                {t.fields.onScreenText}
+                              </div>
+                              <input
+                                value={scene.onScreenText ?? ""}
+                                onChange={(e) =>
+                                  updateStoryboardScene(
+                                    index,
+                                    "onScreenText",
+                                    e.target.value
+                                  )
+                                }
+                                style={styles.input}
+                              />
+                            </div>
+
+                            <div style={styles.field}>
+                              <div style={styles.label}>{t.fields.duration}</div>
+                              <input
+                                type="number"
+                                min={2}
+                                max={10}
+                                value={scene.durationSec}
+                                onChange={(e) =>
+                                  updateStoryboardScene(
+                                    index,
+                                    "durationSec",
+                                    Number(e.target.value)
+                                  )
+                                }
+                                style={styles.input}
+                              />
+                            </div>
+                          </div>
+
+                          <div style={styles.field}>
+                            <div style={styles.label}>{t.fields.scenePrompt}</div>
+                            <textarea
+                              value={scene.prompt}
+                              onChange={(e) =>
+                                updateStoryboardScene(
+                                  index,
+                                  "prompt",
+                                  e.target.value
+                                )
+                              }
+                              style={{ ...styles.textarea, minHeight: 110 }}
+                            />
+                          </div>
+
+                          <div style={styles.field}>
+                            <div style={styles.label}>{t.fields.imagePrompt}</div>
+                            <textarea
+                              value={scene.imagePrompt ?? ""}
+                              onChange={(e) =>
+                                updateStoryboardScene(
+                                  index,
+                                  "imagePrompt",
+                                  e.target.value
+                                )
+                              }
+                              style={{ ...styles.textarea, minHeight: 90 }}
+                            />
+                          </div>
+
+                          <div style={styles.small}>
+                            {t.states.image}:{" "}
+                            {scene.imageUrl ? t.states.yes : t.states.no} —{" "}
+                            {t.states.video}:{" "}
+                            {scene.videoUrl ? t.states.yes : t.states.no}
+                          </div>
+                        </div>
+                      ))}
+
+                      <div style={styles.actions}>
+                        <button
+                          style={styles.secondaryBtn}
+                          onClick={addStoryboardScene}
+                          disabled={storyboard.scenes.length >= 7}
+                        >
+                          {t.buttons.addScene}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {mode === "product" && (
+                <>
+                  <div style={styles.field}>
+                    <div style={styles.label}>{t.fields.productUrl}</div>
+                    <input
+                      value={productUrl}
+                      onChange={(e) => setProductUrl(e.target.value)}
+                      style={styles.input}
+                      placeholder={t.placeholders.productUrl}
+                    />
+                    <div style={styles.hint}>{t.hints.productUrl}</div>
+                  </div>
+
+                  <div style={styles.row}>
+                    <div style={styles.field}>
+                      <div style={styles.label}>{t.fields.productTitle}</div>
+                      <input
+                        value={productTitle}
+                        onChange={(e) => setProductTitle(e.target.value)}
+                        style={styles.input}
+                        placeholder={t.placeholders.productTitle}
+                      />
+                    </div>
+                    <div style={styles.field}>
+                      <div style={styles.label}>{t.fields.duration}</div>
+                      <input
+                        type="number"
+                        min={10}
+                        max={60}
+                        value={durationSec}
+                        onChange={(e) => setDurationSec(Number(e.target.value))}
+                        style={styles.input}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={styles.field}>
+                    <div style={styles.label}>{t.fields.highlights}</div>
+                    <textarea
+                      value={productHighlights}
+                      onChange={(e) => setProductHighlights(e.target.value)}
+                      style={styles.textarea}
+                    />
+                  </div>
+
+                  <div style={styles.divider} />
+
+                  <div style={styles.field}>
+                    <div style={styles.label}>{t.fields.assets}</div>
+
+                    <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                      <label style={{ display: "grid", gap: 6, flex: "1 1 220px" }}>
+                        <span style={styles.label}>{t.fields.logo}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={onPickLogo}
+                          style={styles.input}
+                        />
+                      </label>
+
+                      <label style={{ display: "grid", gap: 6, flex: "1 1 220px" }}>
+                        <span style={styles.label}>{t.fields.images}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          onChange={onPickImages}
+                          style={styles.input}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              <div style={styles.divider} />
+
+              <div style={styles.row}>
+                <div style={styles.field}>
+                  <div style={styles.label}>{t.fields.brand}</div>
+                  <input
+                    value={brand}
+                    onChange={(e) => setBrand(e.target.value)}
+                    style={styles.input}
+                  />
+                </div>
+
+                <div style={styles.field}>
+                  <div style={styles.label}>{t.fields.slogan}</div>
+                  <input
+                    value={slogan}
+                    onChange={(e) => setSlogan(e.target.value)}
+                    style={styles.input}
+                  />
+                </div>
               </div>
+
+              <div style={styles.field}>
+                <div style={styles.label}>{t.fields.descriptionScript}</div>
+                <textarea
+                  value={mode === "images" ? text : computed.text}
+                  onChange={(e) => setText(e.target.value)}
+                  style={styles.textarea}
+                />
+                <div style={styles.hint}>{t.hints.description}</div>
+              </div>
+
+              <div style={styles.row}>
+                <div style={styles.field}>
+                  <div style={styles.label}>{t.fields.format}</div>
+                  <select
+                    value={ratio}
+                    onChange={(e) => setRatio(e.target.value as Ratio)}
+                    style={styles.input}
+                  >
+                    <option value="square">{RATIO_LABEL.square}</option>
+                    <option value="vertical">{RATIO_LABEL.vertical}</option>
+                    <option value="horizontal">{RATIO_LABEL.horizontal}</option>
+                  </select>
+                </div>
+
+                <div style={styles.field}>
+                  <div style={styles.label}>{t.fields.duration}</div>
+                  <input
+                    type="number"
+                    min={10}
+                    max={60}
+                    value={durationSec}
+                    onChange={(e) => setDurationSec(Number(e.target.value))}
+                    style={styles.input}
+                  />
+                </div>
+              </div>
+
+              <div style={styles.actions}>
+                <button
+                  onClick={startRender}
+                  disabled={!canRender || status.status === "rendering"}
+                  style={styles.primaryBtn(
+                    !canRender || status.status === "rendering"
+                  )}
+                >
+                  {status.status === "rendering"
+                    ? t.buttons.rendering
+                    : t.buttons.generateFinalVideo}
+                </button>
+
+                {mode === "text" && (
+                  <button
+                    onClick={generateSceneVideos}
+                    disabled={
+                      !storyboard?.scenes?.length ||
+                      status.status === "rendering"
+                    }
+                    style={styles.secondaryBtn}
+                  >
+                    {t.buttons.generateSceneVideos}
+                  </button>
+                )}
+
+                <button onClick={resetAll} style={styles.secondaryBtn}>
+                  {t.buttons.reset}
+                </button>
+              </div>
+
+              <div style={styles.mono}>{JSON.stringify(payload, null, 2)}</div>
             </div>
-          </div>
+          </section>
 
-          <div style={styles.modeTabs}>
-            {(["text", "images", "product"] as Mode[]).map((m) => (
-              <button
-                key={m}
-                style={styles.modeTab(mode === m)}
-                onClick={() => setMode(m)}
-              >
-                {MODE_LABEL[m]}
-              </button>
-            ))}
-          </div>
-
-          <div style={styles.contentGrid}>
-            <section style={styles.card}>
+          <section style={{ display: "grid", gap: 18 }}>
+            <div style={styles.card}>
               <div style={styles.cardHeader}>
-                <h3 style={styles.cardTitle}>{t.page.projectSetup}</h3>
-                <div style={styles.cardSub}>{t.page.projectSetupSub}</div>
+                <h3 style={styles.cardTitle}>{t.page.preview}</h3>
+                <div style={styles.cardSub}>{t.page.previewSub}</div>
               </div>
 
               <div style={styles.cardBody}>
-                {mode === "images" && (
-                  <>
-                    <div style={styles.field}>
-                      <div style={styles.label}>{t.fields.logo}</div>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={onPickLogo}
-                        style={styles.input}
-                      />
-                      <div style={styles.hint}>{t.hints.logo}</div>
+                <div style={styles.statsGrid}>
+                  <div style={styles.statCard}>
+                    <div style={styles.small}>{t.states.mode}</div>
+                    <div style={styles.statValue}>{MODE_LABEL[mode]}</div>
+                  </div>
+
+                  <div style={styles.statCard}>
+                    <div style={styles.small}>{t.states.scenes}</div>
+                    <div style={styles.statValue}>
+                      {storyboard?.scenes?.length ?? 0}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 12 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      marginBottom: 8,
+                    }}
+                  >
+                    <div style={{ fontWeight: 900 }}>{t.page.progress}</div>
+                    <div style={styles.small}>
+                      {status.status === "idle" && t.page.ready}
+                      {status.status === "rendering" &&
+                        (status.phase ? status.phase : t.page.rendering)}
+                      {status.status === "done" && t.page.done}
+                      {status.status === "error" && t.page.error}
+                    </div>
+                  </div>
+
+                  <div style={styles.progressWrap}>
+                    <div style={styles.progressBar(progressPercent)} />
+                  </div>
+
+                  {status.status === "error" && (
+                    <div
+                      style={{ marginTop: 10, color: "#ffb4b4", fontWeight: 800 }}
+                    >
+                      {status.error}
+                    </div>
+                  )}
+                </div>
+
+                {status.status !== "done" && (
+                  <div
+                    style={{
+                      borderRadius: 18,
+                      border: "1px dashed rgba(255,255,255,0.14)",
+                      background: "rgba(255,255,255,0.03)",
+                      padding: 18,
+                    }}
+                  >
+                    <div
+                      style={{ fontWeight: 950, fontSize: 16, marginBottom: 6 }}
+                    >
+                      {status.status === "rendering"
+                        ? t.states.renderingYourVideo
+                        : t.states.noPreviewYet}
                     </div>
 
-                    <div style={styles.field}>
-                      <div style={styles.label}>{t.fields.images}</div>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        onChange={onPickImages}
-                        style={styles.input}
-                      />
-                      <div style={styles.hint}>{t.hints.images}</div>
+                    <div style={styles.small}>
+                      {status.status === "idle" && t.states.idleHelp}
+                      {status.status === "rendering" && t.states.renderingHelp}
+                      {status.status === "error" && t.states.errorHelp}
+                    </div>
 
-                      {imageUrls.length > 0 && (
-                        <div style={styles.thumbGrid}>
-                          {imageUrls.slice(0, 3).map((u) => (
-                            <div key={u} style={styles.thumb}>
+                    {(logoUrl || imageUrls.length > 0) && (
+                      <>
+                        <div style={styles.divider} />
+                        <div style={{ fontWeight: 900, marginBottom: 8 }}>
+                          {t.states.assets}
+                        </div>
+
+                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                          {logoUrl && (
+                            <div
+                              style={{
+                                ...styles.thumb,
+                                width: 90,
+                                height: 90,
+                                aspectRatio: "auto",
+                              }}
+                            >
+                              <img
+                                src={logoUrl}
+                                alt=""
+                                style={{
+                                  width: "100%",
+                                  height: "100%",
+                                  objectFit: "contain",
+                                }}
+                              />
+                            </div>
+                          )}
+
+                          {imageUrls.slice(0, 5).map((u) => (
+                            <div
+                              key={u}
+                              style={{
+                                ...styles.thumb,
+                                width: 90,
+                                height: 90,
+                                aspectRatio: "auto",
+                              }}
+                            >
                               <img
                                 src={u}
                                 alt=""
@@ -1611,609 +2115,106 @@ export default function Page() {
                             </div>
                           ))}
                         </div>
-                      )}
-                    </div>
-                  </>
-                )}
-
-                {mode === "text" && (
-                  <>
-                    <div style={styles.field}>
-                      <div style={styles.label}>{t.fields.aiIdea}</div>
-                      <textarea
-                        value={idea}
-                        onChange={(e) => setIdea(e.target.value)}
-                        style={{ ...styles.textarea, minHeight: 130 }}
-                        placeholder={t.placeholders.aiIdea}
-                      />
-                      <div style={styles.hint}>{t.hints.aiIdea}</div>
-                    </div>
-
-                    <div style={styles.actions}>
-                      <button
-                        onClick={generateStoryboard}
-                        disabled={storyboardLoading || !idea.trim()}
-                        style={styles.primaryBtn(storyboardLoading || !idea.trim())}
-                      >
-                        {storyboardLoading
-                          ? t.buttons.generatingStoryboard
-                          : t.buttons.generateStoryboard}
-                      </button>
-
-                      <button
-                        onClick={generateSceneVideos}
-                        disabled={
-                          storyboardLoading ||
-                          !storyboard?.scenes?.length ||
-                          status.status === "rendering"
-                        }
-                        style={styles.secondaryBtn}
-                      >
-                        {t.buttons.generateSceneVideos}
-                      </button>
-                    </div>
-
-                    {storyboardError && (
-                      <div style={{ marginTop: 10, color: "#ffb4b4", fontWeight: 800 }}>
-                        {storyboardError}
-                      </div>
+                      </>
                     )}
-
-                    {storyboard && (
-                      <div style={styles.storyboardCard}>
-                        <div style={styles.field}>
-                          <div style={styles.label}>{t.fields.storyboardTitle}</div>
-                          <input
-                            value={storyboard.title}
-                            onChange={(e) => updateStoryboardTitle(e.target.value)}
-                            style={styles.input}
-                          />
-                        </div>
-
-                        <div style={{ ...styles.small, marginBottom: 12 }}>
-                          Vibe: <b>{storyboard?.brand_tone?.vibe ?? "-"}</b> — Keywords:{" "}
-                          {storyboard?.brand_tone?.keywords?.join(", ") ?? "-"}
-                        </div>
-
-                        <div style={styles.field}>
-                          <div style={styles.label}>{t.fields.hook}</div>
-                          <textarea
-                            value={storyboard?.script?.hook ?? ""}
-                            onChange={(e) => updateStoryboardHook(e.target.value)}
-                            style={{ ...styles.textarea, minHeight: 80 }}
-                          />
-                        </div>
-
-                        <div style={styles.field}>
-                          <div style={styles.label}>{t.fields.cta}</div>
-                          <input
-                            value={storyboard?.script?.cta ?? ""}
-                            onChange={(e) => updateStoryboardCta(e.target.value)}
-                            style={styles.input}
-                          />
-                        </div>
-
-                        <div style={{ fontWeight: 900, marginBottom: 8 }}>
-                          {t.fields.bodyLines}
-                        </div>
-                        {storyboard?.script?.body?.map((line, index) => (
-                          <div key={index} style={{ ...styles.row, marginBottom: 8 }}>
-                            <input
-                              value={line}
-                              onChange={(e) => updateStoryboardBody(index, e.target.value)}
-                              style={styles.input}
-                            />
-                            <button
-                              style={styles.dangerBtn}
-                              onClick={() => removeStoryboardBodyLine(index)}
-                            >
-                              {t.buttons.removeLine}
-                            </button>
-                          </div>
-                        ))}
-
-                        <div style={styles.actions}>
-                          <button style={styles.secondaryBtn} onClick={addStoryboardBodyLine}>
-                            {t.buttons.addBodyLine}
-                          </button>
-                        </div>
-
-                        <div style={styles.divider} />
-
-                        <div style={{ fontWeight: 900, marginBottom: 8 }}>
-                          {t.fields.scenes}
-                        </div>
-
-                        {storyboard.scenes.map((scene, index) => (
-                          <div
-                            key={scene.id ?? index}
-                            style={{ ...styles.storyboardCard, marginTop: 10 }}
-                          >
-                            <div
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "center",
-                                gap: 10,
-                                marginBottom: 10,
-                              }}
-                            >
-                              <div style={{ fontWeight: 900 }}>
-                                {t.fields.scenes} {index + 1}
-                              </div>
-                              <button
-                                style={styles.dangerBtn}
-                                onClick={() => removeStoryboardScene(index)}
-                              >
-                                {t.buttons.removeScene}
-                              </button>
-                            </div>
-
-                            <div style={styles.field}>
-                              <div style={styles.label}>{t.fields.sceneTitle}</div>
-                              <input
-                                value={scene.title}
-                                onChange={(e) =>
-                                  updateStoryboardScene(index, "title", e.target.value)
-                                }
-                                style={styles.input}
-                              />
-                            </div>
-
-                            <div style={styles.row}>
-                              <div style={styles.field}>
-                                <div style={styles.label}>{t.fields.onScreenText}</div>
-                                <input
-                                  value={scene.onScreenText ?? ""}
-                                  onChange={(e) =>
-                                    updateStoryboardScene(index, "onScreenText", e.target.value)
-                                  }
-                                  style={styles.input}
-                                />
-                              </div>
-
-                              <div style={styles.field}>
-                                <div style={styles.label}>{t.fields.duration}</div>
-                                <input
-                                  type="number"
-                                  min={2}
-                                  max={10}
-                                  value={scene.durationSec}
-                                  onChange={(e) =>
-                                    updateStoryboardScene(
-                                      index,
-                                      "durationSec",
-                                      Number(e.target.value)
-                                    )
-                                  }
-                                  style={styles.input}
-                                />
-                              </div>
-                            </div>
-
-                            <div style={styles.field}>
-                              <div style={styles.label}>{t.fields.scenePrompt}</div>
-                              <textarea
-                                value={scene.prompt}
-                                onChange={(e) =>
-                                  updateStoryboardScene(index, "prompt", e.target.value)
-                                }
-                                style={{ ...styles.textarea, minHeight: 110 }}
-                              />
-                            </div>
-
-                            <div style={styles.field}>
-                              <div style={styles.label}>{t.fields.imagePrompt}</div>
-                              <textarea
-                                value={scene.imagePrompt ?? ""}
-                                onChange={(e) =>
-                                  updateStoryboardScene(index, "imagePrompt", e.target.value)
-                                }
-                                style={{ ...styles.textarea, minHeight: 90 }}
-                              />
-                            </div>
-
-                            <div style={styles.small}>
-                              {t.states.image}: {scene.imageUrl ? t.states.yes : t.states.no} —{" "}
-                              {t.states.video}: {scene.videoUrl ? t.states.yes : t.states.no}
-                            </div>
-                          </div>
-                        ))}
-
-                        <div style={styles.actions}>
-                          <button
-                            style={styles.secondaryBtn}
-                            onClick={addStoryboardScene}
-                            disabled={storyboard.scenes.length >= 7}
-                          >
-                            {t.buttons.addScene}
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </>
+                  </div>
                 )}
 
-                {mode === "product" && (
+                {status.status === "done" && (
                   <>
-                    <div style={styles.field}>
-                      <div style={styles.label}>{t.fields.productUrl}</div>
-                      <input
-                        value={productUrl}
-                        onChange={(e) => setProductUrl(e.target.value)}
-                        style={styles.input}
-                        placeholder={t.placeholders.productUrl}
-                      />
-                      <div style={styles.hint}>{t.hints.productUrl}</div>
-                    </div>
+                    <video style={styles.video} controls src={status.url} />
 
-                    <div style={styles.row}>
-                      <div style={styles.field}>
-                        <div style={styles.label}>{t.fields.productTitle}</div>
-                        <input
-                          value={productTitle}
-                          onChange={(e) => setProductTitle(e.target.value)}
-                          style={styles.input}
-                          placeholder={t.placeholders.productTitle}
-                        />
-                      </div>
-                      <div style={styles.field}>
-                        <div style={styles.label}>{t.fields.duration}</div>
-                        <input
-                          type="number"
-                          min={10}
-                          max={60}
-                          value={durationSec}
-                          onChange={(e) => setDurationSec(Number(e.target.value))}
-                          style={styles.input}
-                        />
-                      </div>
-                    </div>
-
-                    <div style={styles.field}>
-                      <div style={styles.label}>{t.fields.highlights}</div>
-                      <textarea
-                        value={productHighlights}
-                        onChange={(e) => setProductHighlights(e.target.value)}
-                        style={styles.textarea}
-                      />
-                    </div>
-
-                    <div style={styles.divider} />
-
-                    <div style={styles.field}>
-                      <div style={styles.label}>{t.fields.assets}</div>
-
-                      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                        <label style={{ display: "grid", gap: 6, flex: "1 1 220px" }}>
-                          <span style={styles.label}>{t.fields.logo}</span>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={onPickLogo}
-                            style={styles.input}
-                          />
-                        </label>
-
-                        <label style={{ display: "grid", gap: 6, flex: "1 1 220px" }}>
-                          <span style={styles.label}>{t.fields.images}</span>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            multiple
-                            onChange={onPickImages}
-                            style={styles.input}
-                          />
-                        </label>
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                <div style={styles.divider} />
-
-                <div style={styles.row}>
-                  <div style={styles.field}>
-                    <div style={styles.label}>{t.fields.brand}</div>
-                    <input
-                      value={brand}
-                      onChange={(e) => setBrand(e.target.value)}
-                      style={styles.input}
-                    />
-                  </div>
-
-                  <div style={styles.field}>
-                    <div style={styles.label}>{t.fields.slogan}</div>
-                    <input
-                      value={slogan}
-                      onChange={(e) => setSlogan(e.target.value)}
-                      style={styles.input}
-                    />
-                  </div>
-                </div>
-
-                <div style={styles.field}>
-                  <div style={styles.label}>{t.fields.descriptionScript}</div>
-                  <textarea
-                    value={mode === "images" ? text : computed.text}
-                    onChange={(e) => setText(e.target.value)}
-                    style={styles.textarea}
-                  />
-                  <div style={styles.hint}>{t.hints.description}</div>
-                </div>
-
-                <div style={styles.row}>
-                  <div style={styles.field}>
-                    <div style={styles.label}>{t.fields.format}</div>
-                    <select
-                      value={ratio}
-                      onChange={(e) => setRatio(e.target.value as Ratio)}
-                      style={styles.input}
-                    >
-                      <option value="square">{RATIO_LABEL.square}</option>
-                      <option value="vertical">{RATIO_LABEL.vertical}</option>
-                      <option value="horizontal">{RATIO_LABEL.horizontal}</option>
-                    </select>
-                  </div>
-
-                  <div style={styles.field}>
-                    <div style={styles.label}>{t.fields.duration}</div>
-                    <input
-                      type="number"
-                      min={10}
-                      max={60}
-                      value={durationSec}
-                      onChange={(e) => setDurationSec(Number(e.target.value))}
-                      style={styles.input}
-                    />
-                  </div>
-                </div>
-
-                <div style={styles.actions}>
-                  <button
-                    onClick={startRender}
-                    disabled={!canRender || status.status === "rendering"}
-                    style={styles.primaryBtn(!canRender || status.status === "rendering")}
-                  >
-                    {status.status === "rendering"
-                      ? t.buttons.rendering
-                      : t.buttons.generateFinalVideo}
-                  </button>
-
-                  {mode === "text" && (
-                    <button
-                      onClick={generateSceneVideos}
-                      disabled={
-                        !storyboard?.scenes?.length || status.status === "rendering"
-                      }
-                      style={styles.secondaryBtn}
-                    >
-                      {t.buttons.generateSceneVideos}
-                    </button>
-                  )}
-
-                  <button onClick={resetAll} style={styles.secondaryBtn}>
-                    {t.buttons.reset}
-                  </button>
-                </div>
-
-                <div style={styles.mono}>{JSON.stringify(payload, null, 2)}</div>
-              </div>
-            </section>
-
-            <section style={{ display: "grid", gap: 18 }}>
-              <div style={styles.card}>
-                <div style={styles.cardHeader}>
-                  <h3 style={styles.cardTitle}>{t.page.preview}</h3>
-                  <div style={styles.cardSub}>{t.page.previewSub}</div>
-                </div>
-
-                <div style={styles.cardBody}>
-                  <div style={styles.statsGrid}>
-                    <div style={styles.statCard}>
-                      <div style={styles.small}>{t.states.mode}</div>
-                      <div style={styles.statValue}>{MODE_LABEL[mode]}</div>
-                    </div>
-
-                    <div style={styles.statCard}>
-                      <div style={styles.small}>{t.states.scenes}</div>
-                      <div style={styles.statValue}>{storyboard?.scenes?.length ?? 0}</div>
-                    </div>
-                  </div>
-
-                  <div style={{ marginBottom: 12 }}>
                     <div
                       style={{
                         display: "flex",
-                        justifyContent: "space-between",
-                        marginBottom: 8,
+                        gap: 10,
+                        flexWrap: "wrap",
+                        marginTop: 12,
                       }}
                     >
-                      <div style={{ fontWeight: 900 }}>{t.page.progress}</div>
-                      <div style={styles.small}>
-                        {status.status === "idle" && t.page.ready}
-                        {status.status === "rendering" &&
-                          (status.phase ? status.phase : t.page.rendering)}
-                        {status.status === "done" && t.page.done}
-                        {status.status === "error" && t.page.error}
-                      </div>
+                      <a style={styles.linkBtn} href={status.url} download>
+                        {t.buttons.downloadMp4}
+                      </a>
+
+                      <button
+                        style={styles.secondaryBtn}
+                        onClick={() =>
+                          setStatus({
+                            status: "idle",
+                            progress: 0,
+                            phase: "",
+                          })
+                        }
+                      >
+                        {t.buttons.createAnother}
+                      </button>
                     </div>
+                  </>
+                )}
+              </div>
+            </div>
 
-                    <div style={styles.progressWrap}>
-                      <div style={styles.progressBar(progressPercent)} />
-                    </div>
-
-                    {status.status === "error" && (
-                      <div style={{ marginTop: 10, color: "#ffb4b4", fontWeight: 800 }}>
-                        {status.error}
-                      </div>
-                    )}
-                  </div>
-
-                  {status.status !== "done" && (
-                    <div
-                      style={{
-                        borderRadius: 18,
-                        border: "1px dashed rgba(255,255,255,0.14)",
-                        background: "rgba(255,255,255,0.03)",
-                        padding: 18,
-                      }}
-                    >
-                      <div style={{ fontWeight: 950, fontSize: 16, marginBottom: 6 }}>
-                        {status.status === "rendering"
-                          ? t.states.renderingYourVideo
-                          : t.states.noPreviewYet}
-                      </div>
-
-                      <div style={styles.small}>
-                        {status.status === "idle" && t.states.idleHelp}
-                        {status.status === "rendering" && t.states.renderingHelp}
-                        {status.status === "error" && t.states.errorHelp}
-                      </div>
-
-                      {(logoUrl || imageUrls.length > 0) && (
-                        <>
-                          <div style={styles.divider} />
-                          <div style={{ fontWeight: 900, marginBottom: 8 }}>
-                            {t.states.assets}
-                          </div>
-
-                          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                            {logoUrl && (
-                              <div
-                                style={{
-                                  ...styles.thumb,
-                                  width: 90,
-                                  height: 90,
-                                  aspectRatio: "auto",
-                                }}
-                              >
-                                <img
-                                  src={logoUrl}
-                                  alt=""
-                                  style={{
-                                    width: "100%",
-                                    height: "100%",
-                                    objectFit: "contain",
-                                  }}
-                                />
-                              </div>
-                            )}
-
-                            {imageUrls.slice(0, 5).map((u) => (
-                              <div
-                                key={u}
-                                style={{
-                                  ...styles.thumb,
-                                  width: 90,
-                                  height: 90,
-                                  aspectRatio: "auto",
-                                }}
-                              >
-                                <img
-                                  src={u}
-                                  alt=""
-                                  style={{
-                                    width: "100%",
-                                    height: "100%",
-                                    objectFit: "cover",
-                                  }}
-                                />
-                              </div>
-                            ))}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                  {status.status === "done" && (
-                    <>
-                      <video style={styles.video} controls src={status.url} />
-
-                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
-                        <a style={styles.linkBtn} href={status.url} download>
-                          {t.buttons.downloadMp4}
-                        </a>
-
-                        <button
-                          style={styles.secondaryBtn}
-                          onClick={() =>
-                            setStatus({
-                              status: "idle",
-                              progress: 0,
-                              phase: "",
-                            })
-                          }
-                        >
-                          {t.buttons.createAnother}
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
+            <div style={styles.card}>
+              <div style={styles.cardHeader}>
+                <h3 style={styles.cardTitle}>{t.page.quickSummary}</h3>
+                <div style={styles.cardSub}>{t.page.quickSummarySub}</div>
               </div>
 
-              <div style={styles.card}>
-                <div style={styles.cardHeader}>
-                  <h3 style={styles.cardTitle}>{t.page.quickSummary}</h3>
-                  <div style={styles.cardSub}>{t.page.quickSummarySub}</div>
+              <div style={styles.cardBody}>
+                <div style={styles.field}>
+                  <div style={styles.label}>{t.fields.projectBrand}</div>
+                  <input value={computed.brand} readOnly style={styles.input} />
                 </div>
 
-                <div style={styles.cardBody}>
-                  <div style={styles.field}>
-                    <div style={styles.label}>{t.fields.projectBrand}</div>
-                    <input value={computed.brand} readOnly style={styles.input} />
-                  </div>
+                <div style={styles.field}>
+                  <div style={styles.label}>{t.fields.headlineCta}</div>
+                  <input value={computed.slogan} readOnly style={styles.input} />
+                </div>
 
-                  <div style={styles.field}>
-                    <div style={styles.label}>{t.fields.headlineCta}</div>
-                    <input value={computed.slogan} readOnly style={styles.input} />
-                  </div>
+                {storyboard && (
+                  <>
+                    <div style={styles.field}>
+                      <div style={styles.label}>{t.fields.storyboardTitle}</div>
+                      <input value={storyboard.title} readOnly style={styles.input} />
+                    </div>
 
-                  {storyboard && (
-                    <>
-                      <div style={styles.field}>
-                        <div style={styles.label}>{t.fields.storyboardTitle}</div>
-                        <input value={storyboard.title} readOnly style={styles.input} />
-                      </div>
-
-                      <div style={styles.field}>
-                        <div style={styles.label}>{t.fields.sceneStatus}</div>
-                        <div style={{ ...styles.storyboardCard, marginTop: 0 }}>
-                          {storyboard.scenes.map((scene, index) => (
-                            <div
-                              key={scene.id ?? index}
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                gap: 12,
-                                padding: "8px 0",
-                                borderBottom:
-                                  index === storyboard.scenes.length - 1
-                                    ? "none"
-                                    : "1px solid rgba(255,255,255,0.06)",
-                              }}
-                            >
-                              <div style={{ fontWeight: 700 }}>
-                                {t.fields.scenes} {index + 1}
-                              </div>
-                              <div style={styles.small}>
-                                {t.states.image}: {scene.imageUrl ? t.states.yes : t.states.no} /{" "}
-                                {t.states.video}: {scene.videoUrl ? t.states.yes : t.states.no}
-                              </div>
+                    <div style={styles.field}>
+                      <div style={styles.label}>{t.fields.sceneStatus}</div>
+                      <div style={{ ...styles.storyboardCard, marginTop: 0 }}>
+                        {storyboard.scenes.map((scene, index) => (
+                          <div
+                            key={scene.id ?? index}
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              gap: 12,
+                              padding: "8px 0",
+                              borderBottom:
+                                index === storyboard.scenes.length - 1
+                                  ? "none"
+                                  : "1px solid rgba(255,255,255,0.06)",
+                            }}
+                          >
+                            <div style={{ fontWeight: 700 }}>
+                              {t.fields.scenes} {index + 1}
                             </div>
-                          ))}
-                        </div>
+                            <div style={styles.small}>
+                              {t.states.image}:{" "}
+                              {scene.imageUrl ? t.states.yes : t.states.no} /{" "}
+                              {t.states.video}:{" "}
+                              {scene.videoUrl ? t.states.yes : t.states.no}
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    </>
-                  )}
-                </div>
+                    </div>
+                  </>
+                )}
               </div>
-            </section>
-          </div>
-        </main>
-      </div>
+            </div>
+          </section>
+        </div>
+      </AppPageShell>
 
       {upgradeModalOpen && (
         <div style={styles.overlay}>
@@ -2270,6 +2271,6 @@ export default function Page() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

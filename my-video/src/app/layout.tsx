@@ -1,9 +1,11 @@
-import { Metadata, Viewport } from "next";
+import type { Metadata, Viewport } from "next";
 import "../../styles/global.css";
+import { LanguageProvider } from "../provider/LanguageProvider";
+import { SessionProvider } from "../provider/SessionProvider";
 
 export const metadata: Metadata = {
-  title: "Remotion rendering on Vercel Sandbox",
-  description: "Remotion rendering on Vercel Sandbox",
+  title: "Duble-S Motion AI",
+  description: "Professional AI video generation workspace",
 };
 
 export const viewport: Viewport = {
@@ -19,7 +21,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="bg-background">{children}</body>
+      <body className="bg-background">
+        <LanguageProvider>
+          <SessionProvider>{children}</SessionProvider>
+        </LanguageProvider>
+      </body>
     </html>
   );
 }

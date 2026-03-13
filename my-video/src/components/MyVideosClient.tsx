@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useLanguage } from "../provider/LanguageProvider";
 
 type VideoItem = {
   id: string;
@@ -19,6 +20,7 @@ type Props = {
 };
 
 export function MyVideosClient({ initialVideos }: Props) {
+  const { language, t } = useLanguage();
   const [videos, setVideos] = useState(initialVideos);
   const [query, setQuery] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -36,11 +38,23 @@ export function MyVideosClient({ initialVideos }: Props) {
     });
   }, [videos, query]);
 
-  const handleDelete = async (videoId: string) => {
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this video?"
-    );
+  const statusLabel = (status: VideoItem["status"]) => {
+    if (status === "processing") return t.myVideos.processing;
+    if (status === "ready") return t.myVideos.ready;
+    return t.myVideos.failed;
+  };
 
+  const formatDate = (value?: string | null) => {
+    if (!value) return "-";
+    try {
+      return new Date(value).toLocaleString(language);
+    } catch {
+      return value;
+    }
+  };
+
+  const handleDelete = async (videoId: string) => {
+    const confirmed = window.confirm(t.myVideos.confirmDelete);
     if (!confirmed) return;
 
     try {
@@ -53,12 +67,12 @@ export function MyVideosClient({ initialVideos }: Props) {
       const data = await res.json();
 
       if (!data?.ok) {
-        throw new Error(data?.error ?? "Delete failed");
+        throw new Error(data?.error ?? t.myVideos.deleteFailed);
       }
 
       setVideos((prev) => prev.filter((item) => item.id !== videoId));
     } catch (err: any) {
-      alert(err?.message ?? "Delete failed");
+      alert(err?.message ?? t.myVideos.deleteFailed);
     } finally {
       setDeletingId(null);
     }
@@ -192,12 +206,7 @@ export function MyVideosClient({ initialVideos }: Props) {
   };
 
   if (videos.length === 0) {
-    return (
-      <div style={styles.empty}>
-        No videos found for this account yet. Create your first video and it
-        will appear here.
-      </div>
-    );
+    return <div style={styles.empty}>{t.myVideos.empty}</div>;
   }
 
   return (
@@ -206,21 +215,22 @@ export function MyVideosClient({ initialVideos }: Props) {
         <div style={styles.searchWrap}>
           <input
             style={styles.input}
-            placeholder="Search by title, mode, or ratio..."
+            placeholder={t.myVideos.searchPlaceholder}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
 
         <div style={styles.count}>
-          {filteredVideos.length} video{filteredVideos.length === 1 ? "" : "s"}
+          {filteredVideos.length}{" "}
+          {filteredVideos.length === 1
+            ? t.myVideos.countSingle
+            : t.myVideos.countPlural}
         </div>
       </div>
 
       {filteredVideos.length === 0 ? (
-        <div style={styles.empty}>
-          No videos matched your search.
-        </div>
+        <div style={styles.empty}>{t.myVideos.noSearchResult}</div>
       ) : (
         <div style={styles.grid}>
           {filteredVideos.map((video) => (
@@ -229,25 +239,24 @@ export function MyVideosClient({ initialVideos }: Props) {
                 <div style={styles.badgeRow}>
                   <div style={styles.badge}>{video.mode}</div>
                   <div style={styles.badge}>{video.ratio ?? "-"}</div>
-                  <div style={styles.badge}>{video.status}</div>
+                  <div style={styles.badge}>{statusLabel(video.status)}</div>
                 </div>
 
                 <video
                   src={video.video_url}
                   controls
                   preload="metadata"
+                  poster={video.thumbnail_url ?? undefined}
                   style={styles.video}
                 />
               </div>
 
               <div style={styles.body}>
-                <div style={styles.title}>{video.title}</div>
+                <div style={styles.title}>{video.title || t.myVideos.untitled}</div>
 
                 <div style={styles.meta}>
                   {video.duration_sec ? `${video.duration_sec}s` : "-"} •{" "}
-                  {video.created_at
-                    ? new Date(video.created_at).toLocaleString()
-                    : "-"}
+                  {formatDate(video.created_at)}
                 </div>
 
                 <div style={styles.actions}>
@@ -257,11 +266,11 @@ export function MyVideosClient({ initialVideos }: Props) {
                     rel="noreferrer"
                     style={styles.button}
                   >
-                    Play
+                    {t.myVideos.play}
                   </a>
 
                   <a href={video.video_url} download style={styles.button}>
-                    Download
+                    {t.myVideos.download}
                   </a>
 
                   <button
@@ -270,7 +279,9 @@ export function MyVideosClient({ initialVideos }: Props) {
                     disabled={deletingId === video.id}
                     onClick={() => handleDelete(video.id)}
                   >
-                    {deletingId === video.id ? "Deleting..." : "Delete"}
+                    {deletingId === video.id
+                      ? t.myVideos.deleting
+                      : t.myVideos.delete}
                   </button>
                 </div>
               </div>
