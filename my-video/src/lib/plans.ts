@@ -25,17 +25,20 @@ export const PLAN_RULES: Record<
   },
   agency: {
     label: "Agency",
-    monthlyVideoLimit: null,
+    monthlyVideoLimit: null, // unlimited
     maxDurationSec: 30,
   },
 };
 
-export function getRemainingCredits(plan: PlanName, usedThisMonth: number) {
+export function getRemainingCredits(
+  plan: PlanName,
+  usedThisMonth: number
+): number | null {
   const rule = PLAN_RULES[plan];
 
   if (rule.monthlyVideoLimit === null) {
     return null;
   }
 
-  return Math.max(0, rule.monthlyVideoLimit - usedThisMonth);
+  return Math.max(rule.monthlyVideoLimit - usedThisMonth, 0);
 }

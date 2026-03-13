@@ -43,14 +43,16 @@ export async function ensureUserProfile(input: {
       email,
       full_name,
       plan,
-      monthly_video_count
+      monthly_video_count,
+      monthly_video_reset_at
     )
     values (
       ${input.userId}::text,
       ${input.email},
       ${input.fullName ?? null},
       'free',
-      0
+      0,
+      now()
     )
     on conflict (user_id)
     do update set
@@ -204,9 +206,9 @@ export async function resetMonthlyUsageIfNeeded(userId: string) {
 export async function getResolvedUserPlan(userId: string) {
   const profile = await getUserProfileByUserId(userId);
 
-  const plan = (profile?.plan || "free") as PlanName;
-  const usedThisMonth = profile?.monthly_video_count ?? 0;
+  const plan = ((profile?.plan || "free") as PlanName) ?? "free";
   const rules = PLAN_RULES[plan];
+  const usedThisMonth = profile?.monthly_video_count ?? 0;
   const remainingCredits = getRemainingCredits(plan, usedThisMonth);
 
   return {
@@ -251,6 +253,7 @@ export async function updateUserSubscriptionByCustomerId(input: {
 }) {
   return setSubscriptionByCustomerId(input);
 }
+
 export async function updateUserPlan(input: {
   userId: string;
   plan: PlanName;

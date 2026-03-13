@@ -261,6 +261,8 @@ export async function POST(req: Request) {
     const {
       ensureUserProfile,
       getResolvedUserPlan,
+      incrementMonthlyVideoCount,
+      resetMonthlyUsageIfNeeded,
     } = await import("../../../lib/user-profile-repository");
 
     await ensureUserProfile({
@@ -269,14 +271,12 @@ export async function POST(req: Request) {
       fullName: userName ?? null,
     });
 
+    await resetMonthlyUsageIfNeeded(userId);
+
     const planInfo = await getResolvedUserPlan(userId);
 
     const requestedDuration =
-      typeof body?.durationSec === "number"
-        ? body.durationSec
-        : typeof inputProps.durationSec === "number"
-          ? inputProps.durationSec
-          : 0;
+      typeof inputProps.durationSec === "number" ? inputProps.durationSec : 0;
 
     if (requestedDuration > planInfo.maxDurationSec) {
       return NextResponse.json(
@@ -285,6 +285,11 @@ export async function POST(req: Request) {
           code: "PLAN_DURATION_LIMIT",
           error: `${planInfo.planLabel} plan allows maximum ${planInfo.maxDurationSec} seconds.`,
           upgradeRequired: true,
+          planLabel: planInfo.planLabel,
+          remainingCredits: planInfo.remainingCredits,
+          maxDurationSec: planInfo.maxDurationSec,
+          monthlyVideoLimit: planInfo.monthlyVideoLimit,
+          usedThisMonth: planInfo.usedThisMonth,
         },
         { status: 403 }
       );
@@ -300,6 +305,11 @@ export async function POST(req: Request) {
           code: "PLAN_MONTHLY_LIMIT",
           error: `${planInfo.planLabel} plan monthly video limit reached.`,
           upgradeRequired: true,
+          planLabel: planInfo.planLabel,
+          remainingCredits: planInfo.remainingCredits,
+          maxDurationSec: planInfo.maxDurationSec,
+          monthlyVideoLimit: planInfo.monthlyVideoLimit,
+          usedThisMonth: planInfo.usedThisMonth,
         },
         { status: 403 }
       );
@@ -321,51 +331,53 @@ export async function POST(req: Request) {
       "RENDER_DEBUG_HAS_VIDEO_URLS:",
       (inputProps.storyboard?.scenes ?? []).map((s) => Boolean(s.videoUrl))
     );
+    console.log("RENDER_DEBUG_PLAN_INFO:", planInfo);
 
     sandbox = await createSandbox();
 
-    sandbox = await createSandbox();
+    await addBundleToSandbox({
+      sandbox,
+      bundleDir: "remotion-bundle",
+    });
 
-await addBundleToSandbox({
-  sandbox,
-  bundleDir: "remotion-bundle",
-});
+    let sandboxFilePath: string;
 
-let sandboxFilePath: string;
+    try {
+      const renderResult = await renderMediaOnVercel({
+        sandbox,
+        compositionId: COMP_NAME,
+        inputProps,
+        codec: "h264",
+        outputFile: "/tmp/video.mp4",
+      });
 
-try {
-  const renderResult = await renderMediaOnVercel({
-    sandbox,
-    compositionId: COMP_NAME,
-    inputProps,
-    codec: "h264",
-    outputFile: "/tmp/video.mp4",
-  });
+      sandboxFilePath = renderResult.sandboxFilePath;
+    } catch (err: any) {
+      const debug = serializeError(err);
+      console.error(
+        "RENDER_MEDIA_ON_VERCEL_ERROR:",
+        JSON.stringify(debug, null, 2)
+      );
 
-  sandboxFilePath = renderResult.sandboxFilePath;
-} catch (err: any) {
-  const debug = serializeError(err);
-  console.error("RENDER_MEDIA_ON_VERCEL_ERROR:", JSON.stringify(debug, null, 2));
-
-  return NextResponse.json(
-    {
-      status: "error",
-      code: "RENDER_MEDIA_FAILED",
-      error: debug.message || "Render media failed",
-      debug,
-      compName: COMP_NAME,
-      inputSummary: {
-        ratio: inputProps.ratio ?? null,
-        durationSec: inputProps.durationSec ?? null,
-        scenesCount: inputProps.storyboard?.scenes?.length ?? 0,
-        hasVideoUrls: (inputProps.storyboard?.scenes ?? []).map((s) =>
-          Boolean(s.videoUrl)
-        ),
-      },
-    },
-    { status: 500 }
-  );
-}
+      return NextResponse.json(
+        {
+          status: "error",
+          code: "RENDER_MEDIA_FAILED",
+          error: debug.message || "Render media failed",
+          debug,
+          compName: COMP_NAME,
+          inputSummary: {
+            ratio: inputProps.ratio ?? null,
+            durationSec: inputProps.durationSec ?? null,
+            scenesCount: inputProps.storyboard?.scenes?.length ?? 0,
+            hasVideoUrls: (inputProps.storyboard?.scenes ?? []).map((s) =>
+              Boolean(s.videoUrl)
+            ),
+          },
+        },
+        { status: 500 }
+      );
+    }
 
     const { url } = await uploadToVercelBlob({
       sandbox,
@@ -406,6 +418,8 @@ try {
         scenesCount: inputProps.storyboard?.scenes?.length ?? 0,
       },
     });
+
+    await incrementMonthlyVideoCount(userId);
 
     return NextResponse.json(
       {
