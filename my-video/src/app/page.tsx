@@ -715,17 +715,7 @@ export default function Page() {
     });
   }
 
-  function allScenesReadyForRender(data: StoryboardData | null) {
-    if (!data?.scenes?.length) return false;
-
-    const scenesThatNeedVideo = data.scenes.filter((scene) => !!scene.imageUrl);
-
-    if (scenesThatNeedVideo.length === 0) {
-      return true;
-    }
-
-    return scenesThatNeedVideo.every((scene) => !!scene.videoUrl);
-  }
+  
 
   async function uploadFiles(files: FileList) {
     const form = new FormData();
