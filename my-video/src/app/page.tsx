@@ -242,6 +242,14 @@ const PAGE_TRANSLATIONS = {
       fallback:
         "Mevcut planınız bu işlemi kapsamıyor. Devam etmek için daha yüksek bir plan seçin.",
     },
+    quick: {
+      generateVideo: "Tek Tıkla Video Oluştur",
+      generatingVideo: "Video otomatik oluşturuluyor...",
+      storyboardStep: "Storyboard oluşturuluyor...",
+      sceneStep: "Sahne videoları oluşturuluyor...",
+      renderStep: "Final video oluşturuluyor...",
+      failed: "Otomatik video üretimi başarısız",
+    },
   },
   en: {
     mode: {
@@ -374,6 +382,14 @@ const PAGE_TRANSLATIONS = {
         "Your requested video duration exceeds your current plan limit. Please upgrade to continue.",
       fallback:
         "Your current plan does not cover this action. Please choose a higher plan to continue.",
+    },
+    quick: {
+      generateVideo: "Generate Video",
+      generatingVideo: "Generating video automatically...",
+      storyboardStep: "Generating storyboard...",
+      sceneStep: "Generating scene videos...",
+      renderStep: "Rendering final video...",
+      failed: "Automatic video generation failed",
     },
   },
   de: {
@@ -511,6 +527,14 @@ const PAGE_TRANSLATIONS = {
       fallback:
         "Ihr aktueller Plan deckt diese Aktion nicht ab. Bitte wählen Sie einen höheren Plan, um fortzufahren.",
     },
+    quick: {
+      generateVideo: "Video automatisch erstellen",
+      generatingVideo: "Video wird automatisch erstellt...",
+      storyboardStep: "Storyboard wird erstellt...",
+      sceneStep: "Szenenvideos werden erstellt...",
+      renderStep: "Finales Video wird gerendert...",
+      failed: "Automatische Videoerstellung fehlgeschlagen",
+    },
   },
 } as const;
 
@@ -574,14 +598,17 @@ export default function Page() {
     usedThisMonth?: number;
   } | null>(null);
 
-  const sceneVideoCacheRef = useRef<Map<string, string>>(new Map());
+  const [autoGenerating, setAutoGenerating] = useState(false);
   const [sceneGenerationLocked, setSceneGenerationLocked] = useState(false);
+
+  const sceneVideoCacheRef = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
     setBaseUrl(window.location.origin);
   }, []);
 
   const t = PAGE_TRANSLATIONS[language];
+  const quickText = t.quick;
 
   const MODE_LABEL: Record<Mode, string> = {
     images: t.mode.images,
@@ -698,23 +725,6 @@ export default function Page() {
     ].join("::");
   }
 
-  function updateSingleScene(index: number, patch: Partial<StoryboardScene>) {
-    setStoryboard((prev) => {
-      if (!prev) return prev;
-
-      const scenes = [...prev.scenes];
-      scenes[index] = {
-        ...scenes[index],
-        ...patch,
-      };
-
-      return {
-        ...prev,
-        scenes,
-      };
-    });
-  }
-
   
 
   async function uploadFiles(files: FileList) {
@@ -769,13 +779,16 @@ export default function Page() {
     }
   }
 
-  async function generateStoryboard() {
+  async function generateStoryboard(
+    overrideIdea?: string
+  ): Promise<StoryboardData | null> {
     try {
       setStoryboardLoading(true);
       setStoryboardError("");
       setStoryboard(null);
 
       const finalIdea =
+        overrideIdea?.trim() ||
         idea.trim() ||
         prompt.trim() ||
         "Create a cinematic ad for a digital agency with modern, premium, realistic scenes.";
@@ -802,18 +815,20 @@ export default function Page() {
         throw new Error("No storyboard returned");
       }
 
-      setStoryboard({
+      const normalizedStoryboard: StoryboardData = {
         ...data.storyboard,
-        scenes: (data.storyboard.scenes || []).map(
-          (scene: StoryboardScene) => ({
-            ...scene,
-            generationStatus: scene.videoUrl ? "ready" : "idle",
-            generationError: "",
-          })
-        ),
-      });
+        scenes: (data.storyboard.scenes || []).map((scene: StoryboardScene) => ({
+          ...scene,
+          generationStatus: scene.videoUrl ? "ready" : "idle",
+          generationError: "",
+        })),
+      };
+
+      setStoryboard(normalizedStoryboard);
+      return normalizedStoryboard;
     } catch (err: any) {
       setStoryboardError(err?.message ?? "Storyboard generation failed");
+      return null;
     } finally {
       setStoryboardLoading(false);
     }
@@ -978,17 +993,22 @@ export default function Page() {
     setUpgradeModalOpen(false);
     setUpgradeMessage("");
     setUpgradeDetails(null);
+    setAutoGenerating(false);
     sceneVideoCacheRef.current.clear();
   }
 
-  async function generateSceneVideos() {
-    if (!storyboard?.scenes?.length) {
+  async function generateSceneVideos(
+    storyboardOverride?: StoryboardData | null
+  ): Promise<StoryboardData | null> {
+    const activeStoryboard = storyboardOverride ?? storyboard;
+
+    if (!activeStoryboard?.scenes?.length) {
       alert(t.placeholders.storyboardNotFound);
-      return;
+      return null;
     }
 
     if (sceneGenerationLocked) {
-      return;
+      return activeStoryboard;
     }
 
     try {
@@ -1000,15 +1020,16 @@ export default function Page() {
         phase: t.states.generatingSceneVideos,
       });
 
-      const total = storyboard.scenes.length;
-      let generatedCount = 0;
+      const total = activeStoryboard.scenes.length;
       let anyFailure = false;
+      const updatedScenes: StoryboardScene[] = [];
 
       for (let index = 0; index < total; index++) {
-        const currentScene = storyboard.scenes[index];
+        const currentScene = activeStoryboard.scenes[index];
 
         if (!currentScene.imageUrl) {
-          updateSingleScene(index, {
+          updatedScenes.push({
+            ...currentScene,
             generationStatus: currentScene.videoUrl ? "ready" : "idle",
             generationError: "",
           });
@@ -1016,7 +1037,8 @@ export default function Page() {
         }
 
         if (currentScene.videoUrl) {
-          updateSingleScene(index, {
+          updatedScenes.push({
+            ...currentScene,
             generationStatus: "ready",
             generationError: "",
           });
@@ -1027,19 +1049,14 @@ export default function Page() {
         const cachedVideoUrl = sceneVideoCacheRef.current.get(cacheKey);
 
         if (cachedVideoUrl) {
-          updateSingleScene(index, {
+          updatedScenes.push({
+            ...currentScene,
             videoUrl: cachedVideoUrl,
             generationStatus: "ready",
             generationError: "",
           });
-          generatedCount += 1;
           continue;
         }
-
-        updateSingleScene(index, {
-          generationStatus: "generating",
-          generationError: "",
-        });
 
         setStatus({
           status: "rendering",
@@ -1067,31 +1084,27 @@ export default function Page() {
           const data = await res.json().catch(() => null);
 
           if (!res.ok) {
-            throw new Error(
-              data?.error || t.states.sceneVideoGenerationFailed
-            );
+            throw new Error(data?.error || t.states.sceneVideoGenerationFailed);
           }
 
           if (!data?.ok || !data?.videoUrl) {
-            throw new Error(
-              data?.error || t.states.sceneVideoGenerationFailed
-            );
+            throw new Error(data?.error || t.states.sceneVideoGenerationFailed);
           }
 
           sceneVideoCacheRef.current.set(cacheKey, data.videoUrl);
 
-          updateSingleScene(index, {
+          updatedScenes.push({
+            ...currentScene,
             videoUrl: data.videoUrl,
             generationStatus: "ready",
             generationError: "",
           });
-
-          generatedCount += 1;
         } catch (error: any) {
           console.error("Scene video generation failed:", error);
           anyFailure = true;
 
-          updateSingleScene(index, {
+          updatedScenes.push({
+            ...currentScene,
             generationStatus: "failed",
             generationError:
               error?.message || t.states.sceneVideoGenerationFailed,
@@ -1099,16 +1112,23 @@ export default function Page() {
         }
       }
 
+      const updatedStoryboard: StoryboardData = {
+        ...activeStoryboard,
+        scenes: updatedScenes,
+      };
+
+      setStoryboard(updatedStoryboard);
+
       setStatus({
         status: anyFailure ? "error" : "idle",
         progress: 0,
         phase: anyFailure
           ? t.states.sceneVideoGenerationFailed
           : t.states.sceneVideosGenerated,
-        ...(anyFailure
-          ? { error: t.states.sceneVideoGenerationFailed }
-          : {}),
+        ...(anyFailure ? { error: t.states.sceneVideoGenerationFailed } : {}),
       });
+
+      return updatedStoryboard;
     } catch (error) {
       console.error(error);
 
@@ -1118,12 +1138,18 @@ export default function Page() {
         phase: t.states.sceneVideoGenerationFailed,
         error: t.states.sceneVideoGenerationFailed,
       });
+
+      return null;
     } finally {
       setSceneGenerationLocked(false);
     }
   }
 
-  async function startRender() {
+  async function startRender(
+    storyboardOverride?: StoryboardData | null
+  ): Promise<boolean> {
+    const activeStoryboard = storyboardOverride ?? storyboard;
+
     if (!baseUrl) {
       setStatus({
         status: "error",
@@ -1131,11 +1157,11 @@ export default function Page() {
         phase: t.states.baseUrlNotReady,
         error: `${t.states.baseUrlNotReady}. Refresh once.`,
       });
-      return;
+      return false;
     }
 
-    if (mode === "text" && storyboard?.scenes?.length) {
-      const scenesWithImages = storyboard.scenes.filter(
+    if (mode === "text" && activeStoryboard?.scenes?.length) {
+      const scenesWithImages = activeStoryboard.scenes.filter(
         (scene) => !!scene.imageUrl
       );
       const missingSceneVideos = scenesWithImages.some(
@@ -1149,7 +1175,7 @@ export default function Page() {
           phase: t.states.sceneVideoGenerationFailed,
           error: t.states.allSceneVideosMustBeReady,
         });
-        return;
+        return false;
       }
     }
 
@@ -1160,12 +1186,12 @@ export default function Page() {
     });
 
     const finalPayload =
-      mode === "text" && storyboard
+      mode === "text" && activeStoryboard
         ? {
             ...payload,
-            text: storyboard?.script?.body?.join(" ") ?? "",
-            slogan: storyboard?.script?.cta ?? payload.slogan,
-            storyboard,
+            text: activeStoryboard?.script?.body?.join(" ") ?? "",
+            slogan: activeStoryboard?.script?.cta ?? payload.slogan,
+            storyboard: activeStoryboard,
           }
         : payload;
 
@@ -1205,10 +1231,15 @@ export default function Page() {
             phase: "",
           });
 
-          return;
+          return false;
         }
 
-        throw new Error(data?.error ?? t.states.renderFailed);
+        throw new Error(
+          data?.error ||
+            data?.message ||
+            data?.code ||
+            `Render request failed with status ${res.status}`
+        );
       }
 
       if (contentType.includes("text/event-stream")) {
@@ -1250,13 +1281,19 @@ export default function Page() {
           phase: t.states.renderComplete,
           url: finalUrl,
         });
-        return;
+
+        return true;
       }
 
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
 
       if (!res.ok) {
-        throw new Error(data?.error ?? t.states.renderFailed);
+        throw new Error(
+          data?.error ||
+            data?.message ||
+            data?.code ||
+            `Render request failed with status ${res.status}`
+        );
       }
 
       if (!data?.url) {
@@ -1269,6 +1306,8 @@ export default function Page() {
         phase: t.states.renderComplete,
         url: data.url,
       });
+
+      return true;
     } catch (err: any) {
       setStatus({
         status: "error",
@@ -1276,6 +1315,63 @@ export default function Page() {
         phase: t.states.renderFailed,
         error: err?.message ?? t.states.renderFailed,
       });
+
+      return false;
+    }
+  }
+
+  async function generateVideoDirect() {
+    if (autoGenerating || storyboardLoading || sceneGenerationLocked) {
+      return;
+    }
+
+    try {
+      setAutoGenerating(true);
+
+      setStatus({
+        status: "rendering",
+        progress: 5,
+        phase: quickText.storyboardStep,
+      });
+
+      const generatedStoryboard = await generateStoryboard(idea);
+
+      if (!generatedStoryboard) {
+        throw new Error(quickText.failed);
+      }
+
+      setStatus({
+        status: "rendering",
+        progress: 35,
+        phase: quickText.sceneStep,
+      });
+
+      const storyboardWithVideos = await generateSceneVideos(generatedStoryboard);
+
+      if (!storyboardWithVideos) {
+        throw new Error(quickText.failed);
+      }
+
+      setStatus({
+        status: "rendering",
+        progress: 75,
+        phase: quickText.renderStep,
+      });
+
+      const renderOk = await startRender(storyboardWithVideos);
+
+      if (!renderOk) {
+        throw new Error(quickText.failed);
+      }
+    } catch (err: any) {
+      setStatus({
+        status: "error",
+        progress: 0,
+        phase: t.states.renderFailed,
+        error: err?.message || quickText.failed,
+      });
+    } finally {
+      setAutoGenerating(false);
     }
   }
 
@@ -1714,11 +1810,31 @@ export default function Page() {
 
                   <div style={styles.actions}>
                     <button
-                      onClick={generateStoryboard}
-                      disabled={storyboardLoading || !idea.trim()}
+                      onClick={generateVideoDirect}
+                      disabled={
+                        autoGenerating ||
+                        storyboardLoading ||
+                        sceneGenerationLocked ||
+                        !idea.trim() ||
+                        status.status === "rendering"
+                      }
                       style={styles.primaryBtn(
-                        storyboardLoading || !idea.trim()
+                        autoGenerating ||
+                          storyboardLoading ||
+                          sceneGenerationLocked ||
+                          !idea.trim() ||
+                          status.status === "rendering"
                       )}
+                    >
+                      {autoGenerating
+                        ? quickText.generatingVideo
+                        : quickText.generateVideo}
+                    </button>
+
+                    <button
+                      onClick={() => generateStoryboard()}
+                      disabled={storyboardLoading || autoGenerating || !idea.trim()}
+                      style={styles.secondaryBtn}
                     >
                       {storyboardLoading
                         ? t.buttons.generatingStoryboard
@@ -1726,12 +1842,13 @@ export default function Page() {
                     </button>
 
                     <button
-                      onClick={generateSceneVideos}
+                      onClick={() => generateSceneVideos()}
                       disabled={
                         storyboardLoading ||
                         !storyboard?.scenes?.length ||
                         status.status === "rendering" ||
-                        sceneGenerationLocked
+                        sceneGenerationLocked ||
+                        autoGenerating
                       }
                       style={styles.secondaryBtn}
                     >
@@ -1759,8 +1876,7 @@ export default function Page() {
                       </div>
 
                       <div style={{ ...styles.small, marginBottom: 12 }}>
-                        Vibe: <b>{storyboard?.brand_tone?.vibe ?? "-"}</b> —
-                        Keywords:{" "}
+                        Vibe: <b>{storyboard?.brand_tone?.vibe ?? "-"}</b> — Keywords:{" "}
                         {storyboard?.brand_tone?.keywords?.join(", ") ?? "-"}
                       </div>
 
@@ -1790,9 +1906,7 @@ export default function Page() {
                         <div key={index} style={{ ...styles.row, marginBottom: 8 }}>
                           <input
                             value={line}
-                            onChange={(e) =>
-                              updateStoryboardBody(index, e.target.value)
-                            }
+                            onChange={(e) => updateStoryboardBody(index, e.target.value)}
                             style={styles.input}
                           />
                           <button
@@ -1805,10 +1919,7 @@ export default function Page() {
                       ))}
 
                       <div style={styles.actions}>
-                        <button
-                          style={styles.secondaryBtn}
-                          onClick={addStoryboardBodyLine}
-                        >
+                        <button style={styles.secondaryBtn} onClick={addStoryboardBodyLine}>
                           {t.buttons.addBodyLine}
                         </button>
                       </div>
@@ -1849,11 +1960,7 @@ export default function Page() {
                             <input
                               value={scene.title}
                               onChange={(e) =>
-                                updateStoryboardScene(
-                                  index,
-                                  "title",
-                                  e.target.value
-                                )
+                                updateStoryboardScene(index, "title", e.target.value)
                               }
                               style={styles.input}
                             />
@@ -1861,17 +1968,11 @@ export default function Page() {
 
                           <div style={styles.row}>
                             <div style={styles.field}>
-                              <div style={styles.label}>
-                                {t.fields.onScreenText}
-                              </div>
+                              <div style={styles.label}>{t.fields.onScreenText}</div>
                               <input
                                 value={scene.onScreenText ?? ""}
                                 onChange={(e) =>
-                                  updateStoryboardScene(
-                                    index,
-                                    "onScreenText",
-                                    e.target.value
-                                  )
+                                  updateStoryboardScene(index, "onScreenText", e.target.value)
                                 }
                                 style={styles.input}
                               />
@@ -1901,11 +2002,7 @@ export default function Page() {
                             <textarea
                               value={scene.prompt}
                               onChange={(e) =>
-                                updateStoryboardScene(
-                                  index,
-                                  "prompt",
-                                  e.target.value
-                                )
+                                updateStoryboardScene(index, "prompt", e.target.value)
                               }
                               style={{ ...styles.textarea, minHeight: 110 }}
                             />
@@ -1916,25 +2013,17 @@ export default function Page() {
                             <textarea
                               value={scene.imagePrompt ?? ""}
                               onChange={(e) =>
-                                updateStoryboardScene(
-                                  index,
-                                  "imagePrompt",
-                                  e.target.value
-                                )
+                                updateStoryboardScene(index, "imagePrompt", e.target.value)
                               }
                               style={{ ...styles.textarea, minHeight: 90 }}
                             />
                           </div>
 
                           <div style={styles.small}>
-                            {t.states.image}:{" "}
-                            {scene.imageUrl ? t.states.yes : t.states.no} —{" "}
-                            {t.states.video}:{" "}
-                            {scene.videoUrl ? t.states.yes : t.states.no} — Status:{" "}
-                            {scene.generationStatus ?? "idle"}
-                            {scene.generationError
-                              ? ` — ${scene.generationError}`
-                              : ""}
+                            {t.states.image}: {scene.imageUrl ? t.states.yes : t.states.no} —{" "}
+                            {t.states.video}: {scene.videoUrl ? t.states.yes : t.states.no} —{" "}
+                            Status: {scene.generationStatus ?? "idle"}
+                            {scene.generationError ? ` — ${scene.generationError}` : ""}
                           </div>
                         </div>
                       ))}
@@ -2090,24 +2179,37 @@ export default function Page() {
 
               <div style={styles.actions}>
                 <button
-                  onClick={startRender}
-                  disabled={!canRender || status.status === "rendering"}
+                  onClick={mode === "text" ? generateVideoDirect : () => startRender()}
+                  disabled={
+                    !canRender ||
+                    status.status === "rendering" ||
+                    autoGenerating ||
+                    sceneGenerationLocked
+                  }
                   style={styles.primaryBtn(
-                    !canRender || status.status === "rendering"
+                    !canRender ||
+                      status.status === "rendering" ||
+                      autoGenerating ||
+                      sceneGenerationLocked
                   )}
                 >
-                  {status.status === "rendering"
-                    ? t.buttons.rendering
-                    : t.buttons.generateFinalVideo}
+                  {mode === "text"
+                    ? autoGenerating
+                      ? quickText.generatingVideo
+                      : quickText.generateVideo
+                    : status.status === "rendering"
+                      ? t.buttons.rendering
+                      : t.buttons.generateFinalVideo}
                 </button>
 
                 {mode === "text" && (
                   <button
-                    onClick={generateSceneVideos}
+                    onClick={() => generateSceneVideos()}
                     disabled={
                       !storyboard?.scenes?.length ||
                       status.status === "rendering" ||
-                      sceneGenerationLocked
+                      sceneGenerationLocked ||
+                      autoGenerating
                     }
                     style={styles.secondaryBtn}
                   >
@@ -2140,9 +2242,7 @@ export default function Page() {
 
                   <div style={styles.statCard}>
                     <div style={styles.small}>{t.states.scenes}</div>
-                    <div style={styles.statValue}>
-                      {storyboard?.scenes?.length ?? 0}
-                    </div>
+                    <div style={styles.statValue}>{storyboard?.scenes?.length ?? 0}</div>
                   </div>
                 </div>
 
@@ -2169,9 +2269,7 @@ export default function Page() {
                   </div>
 
                   {status.status === "error" && (
-                    <div
-                      style={{ marginTop: 10, color: "#ffb4b4", fontWeight: 800 }}
-                    >
+                    <div style={{ marginTop: 10, color: "#ffb4b4", fontWeight: 800 }}>
                       {status.error}
                     </div>
                   )}
@@ -2186,9 +2284,7 @@ export default function Page() {
                       padding: 18,
                     }}
                   >
-                    <div
-                      style={{ fontWeight: 950, fontSize: 16, marginBottom: 6 }}
-                    >
+                    <div style={{ fontWeight: 950, fontSize: 16, marginBottom: 6 }}>
                       {status.status === "rendering"
                         ? t.states.renderingYourVideo
                         : t.states.noPreviewYet}
@@ -2260,14 +2356,7 @@ export default function Page() {
                   <>
                     <video style={styles.video} controls src={status.url} />
 
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: 10,
-                        flexWrap: "wrap",
-                        marginTop: 12,
-                      }}
-                    >
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
                       <a style={styles.linkBtn} href={status.url} download>
                         {t.buttons.downloadMp4}
                       </a>
@@ -2335,10 +2424,8 @@ export default function Page() {
                               {t.fields.scenes} {index + 1}
                             </div>
                             <div style={styles.small}>
-                              {t.states.image}:{" "}
-                              {scene.imageUrl ? t.states.yes : t.states.no} /{" "}
-                              {t.states.video}:{" "}
-                              {scene.videoUrl ? t.states.yes : t.states.no}
+                              {t.states.image}: {scene.imageUrl ? t.states.yes : t.states.no} /{" "}
+                              {t.states.video}: {scene.videoUrl ? t.states.yes : t.states.no}
                             </div>
                           </div>
                         ))}

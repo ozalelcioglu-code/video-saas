@@ -30,16 +30,32 @@ const getMotionPreset = (index: number) => {
   return presets[index % presets.length];
 };
 
-const isRenderableVideoUrl = (url?: string) => {
-  if (!url) return false;
+const isHttpUrl = (url?: string) => {
+  if (!url || typeof url !== "string") return false;
 
-  const lower = url.toLowerCase();
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
+};
+
+const isRenderableVideoUrl = (url?: string) => {
+  if (!isHttpUrl(url)) return false;
+
+  const lower = url!.toLowerCase();
 
   return (
     lower.includes(".public.blob.vercel-storage.com") ||
     lower.includes("blob.vercel-storage.com") ||
+    lower.includes("vercel-storage.com") ||
+    lower.includes("dublesmotion.com") ||
+    lower.includes("www.dublesmotion.com") ||
     lower.includes("app.dublesmotion.com") ||
-    lower.includes("vercel-storage.com")
+    lower.includes("video-saas-sooty.vercel.app") ||
+    lower.includes("replicate.delivery") ||
+    lower.includes("replicate.com")
   );
 };
 
@@ -76,8 +92,7 @@ const MediaLayer: React.FC<{
     transform: `scale(${scale}) translate(${translateX}%, ${translateY}%)`,
   };
 
-  // SADECE güvenli / kendi host ettiğimiz video URL'lerini render et
-  // replicate.delivery gibi geçici URL'ler final render'da 400 patlatabiliyor
+  // Öncelik: sahne videosu varsa onu kullan
   if (scene.videoUrl && isRenderableVideoUrl(scene.videoUrl)) {
     return (
       <OffthreadVideo
@@ -92,8 +107,8 @@ const MediaLayer: React.FC<{
     );
   }
 
-  // Güvenli fallback: scene image ile final video oluştur
-  if (scene.imageUrl) {
+  // Fallback: sahne görseli varsa onunla render al
+  if (scene.imageUrl && isHttpUrl(scene.imageUrl)) {
     return <Img src={scene.imageUrl} style={animatedStyle} />;
   }
 
@@ -257,7 +272,10 @@ const SceneCard: React.FC<{
 
   const wrapperScale = interpolate(enterScale, [0, 1], [1.02, 1]);
 
-  const hasMedia = Boolean(scene.imageUrl || scene.videoUrl);
+  const hasMedia = Boolean(
+    (scene.videoUrl && isRenderableVideoUrl(scene.videoUrl)) ||
+      (scene.imageUrl && isHttpUrl(scene.imageUrl))
+  );
 
   return (
     <AbsoluteFill
